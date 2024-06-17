@@ -11,9 +11,11 @@ input[type="checkbox"] {
 
 .title {
     color: black;
-    font-size: xx-large;
+    font-size: 24px;
     font-weight: bolder;
-    margin: 10px 10px 10px 0px;
+    height: 50px;
+    margin-bottom: 5px;
+    object-fit: contain;
     text-align: center;
     text-decoration-line: underline;
     text-decoration-thickness: 1px;
@@ -49,19 +51,17 @@ input[type="checkbox"] {
     width: 100%;
 }
 
-.menuOptions > button {
+.menuOptions > button, .createPuzzle > button, .createFolderOverlay > button {
     background-color: #007eec;
     border: 1px solid #0460b1;
     border-radius: 4px;
-    box-shadow: rgba(0, 0, 0, .1) 0 2px 4px 0;
+    box-shadow: rgba(0, 0, 0, .1) 0px 2px 4px 0px;
     box-sizing: border-box;
     color: #fff;
     cursor: pointer;
     font-size: 14px;
     font-weight: 400;
-    margin-bottom: 3px;
-    outline: none;
-    outline: 0;
+    outline: 0px;
     padding: 5px;
     text-align: center;
     touch-action: manipulation;
@@ -71,14 +71,20 @@ input[type="checkbox"] {
     -webkit-user-select: none;
 }
 
-.menuOptions > button:hover {
-  box-shadow: rgba(0, 0, 0, .20) 0 3px 9px 0;
+.menuOptions > button:hover:not([disabled]), .createPuzzle > button:hover:not([disabled]), .createFolderOverlay > button:hover:not([disabled]) {
+  box-shadow: rgba(0, 0, 0, .20) 0px 3px 9px 0px;
   transform: translateY(-1px);
+}
+
+.menuOptions > button:disabled, .createPuzzle > button:disabled, .createFolderOverlay > button:disabled {
+  border: 1px solid #999999;
+  background-color: #cccccc;
+  color: #666666;
 }
 
 .menuItem {
     aspect-ratio: 1/1;
-    background-color: #798bff;
+    background-color: #007eec;
     background-position: center center;
     background-repeat: no-repeat;
     background-size: cover;
@@ -91,21 +97,22 @@ input[type="checkbox"] {
 }
 
 .menuItem:hover {
-    box-shadow: rgba(0, 0, 0, .35) 0 3px 9px 0;
+    box-shadow: rgba(0, 0, 0, .35) 0px 3px 9px 0px;
+    cursor: pointer;
     transform: translateY(-2px);
-  }
+}
 
 .menuItemHeader {
     background-color: black;
     height: 30px;
-    left: 0;
+    left: 0px;
     opacity: .5;
-    top: 0;
+    top: 0px;
 }
 
 .menuItemTitle {
     color: white;
-    left: 0;
+    left: 0px;
     line-height: 20px;
     margin: 5px;
     opacity: 1;
@@ -113,7 +120,7 @@ input[type="checkbox"] {
     position: absolute;
     text-overflow: ellipsis;
     text-wrap: nowrap;
-    top: 0;
+    top: 0px;
     width: 165px;
 }
 
@@ -141,14 +148,14 @@ input[type="checkbox"] {
 .createPuzzleHeader {
     background-color: black;
     height: 30px;
-    left: 0;
+    left: 0px;
     opacity: .5;
-    top: 0;
+    top: 0px;
 }
 
 .createPuzzleTitle {
     color: white;
-    left: 0;
+    left: 0px;
     line-height: 20px;
     margin: 5px;
     opacity: 1;
@@ -156,7 +163,7 @@ input[type="checkbox"] {
     position: absolute;
     text-overflow: ellipsis;
     text-wrap: nowrap;
-    top: 0;
+    top: 0px;
     width: 370px;
 }
 
@@ -175,4 +182,85 @@ input[type="checkbox"] {
 
 .createPuzzleButton {
     margin: 0px 0px 5px 5px;
+}
+
+.diskSpace {
+    background-color: #47a9ff;
+    border: 1px solid #0460b1;
+    border-radius: 4px;
+    box-shadow: rgba(0, 0, 0, .1) 0px 2px 4px 0px;
+    box-sizing: border-box;
+    cursor: pointer;
+    outline: none;
+    outline: 0px;
+    padding: 3px 10px;
+    position: absolute;
+    right: 5px;
+    top: 5px;
+    touch-action: manipulation;
+    transform: translateY(0);
+    transition: transform 150ms, box-shadow 150ms;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.diskSpace:hover {
+    box-shadow: rgba(0, 0, 0, .2) 0px 3px 9px 0px;
+    transform: translateY(-1px);
+}
+.diskSpaceText {
+    color: #fff;
+    display: none;
+    font-size: 12px;
+    font-weight: 400;
+    vertical-align: middle;
+}
+
+.createFolderOverlay {
+    position: absolute;
+    background-color: #4babff;
+    border: 2px solid #0460b1;
+    left: 50%;
+    width: 300px;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.createFolderOverlayHeader {
+    background-color: black;
+    height: 30px;
+    left: 0px;
+    opacity: .5;
+    top: 0px;
+}
+
+.createFolderOverlayTitle {
+    color: white;
+    left: 0px;
+    line-height: 20px;
+    margin: 5px;
+    opacity: 1;
+    overflow: hidden;
+    position: absolute;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+    top: 0px;
+    width: 165px;
+}
+
+.createFolderOverlayInput {
+    display: block;
+    margin: 5px;
+}
+
+.createFolderOverlayButton {
+    margin: 20px 5px 5px 5px;
+}
+
+.createPuzzleName, .createFolderName {
+
+}
+
+.dragging {
+    opacity: .25;
 }

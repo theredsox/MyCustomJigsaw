@@ -1,43 +1,103 @@
-// Tracks the image cropper object used for creating new puzzles
-var cropper;
+// Priority TODOs
+// * Better text input field CSS
+// * Implement delete button
+// * A way to navigate back to the root folder and know which folder you are in
+// * A way to pull a puzzle out to the root folder, drag it to the navigate back button maybe
+// * Hide create folder button when not in root folder
+// * When hovering a puzzle over a folder, add a CSS class on the folder to make it "glow"
+// * Implement import and export buttons (Export to zip, import from zip)
+// * Add a Rename button 
+// * Create the start game overlay (number of pieces, allow rotating, and advanced options like shape uniformity)
+// * Create the game board and initialize the pieces
+// * Initial play functionality (snap pieces, rotate pieces, puzzle image for reference, zoom, buckets, sound on/off)
+// * Controls: left click+drag = move, right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select pieces in area
+// * Create a help menu (describes controls; drag and drop and mouse/keys for when playing)
+// * Create a first pass at stat tracking
+// * Advanced play options - auto-sorting by shape/color onto board or into buckets
+// * BUG: Determine why fade out for pages works, but fade in happens fast. Maybe try non-CSS opacity fade, display none, display, opacity reveal
+
+
+// Tracks the active folder for the puzzle menu
+var ACTIVE_FID = "root";
+
+// Tracks the singleton image cropper object used for creating new puzzles
+var CROPPER;
 
 window.onresize = function() {
-    if (cropper) {
+    if (CROPPER) {
         // Reset the cropper positioning on window resize since the image may scale
         // NOTE: Does not appear a debounce is needed for performance, but keep an eye on it
-        cropper.reset(); 
+        CROPPER.reset(); 
     }
 }
 
-function loadMainMenu() {
+async function loadMainMenu() {
     // Clear the puzzles first, as this may be a reload
     var mainMenu = document.getElementById("mainMenu");
-    var menuOptions = mainMenu.getElementsByClassName("menuOptions")
-    while (menuOptions.length > 1) { 
-        mainMenu.removeChild(menuOptions[menuOptions.length - 1]);
+    var menuItems = mainMenu.getElementsByClassName("menuItem")
+    while (menuItems.length > 0) { 
+        mainMenu.removeChild(menuItems[menuItems.length - 1]);
     }
 
-    // TODO: Grab saved puzzles from browser storage and load each
-    loadMenuItem("One");
-    loadMenuItem("Two");
-    loadMenuItem("Three");
-    loadMenuItem("Four");
-    loadMenuItem("Five");
-    loadMenuItem("Six");
-    loadMenuItem("Seven");
-    loadMenuItem("Eight testing long name that needs to be truncated");
-    loadMenuItem("Nine");
-    loadMenuItem("Ten");
+    // Load the saved puzzles
+    let puzzles = getPuzzles(ACTIVE_FID);
+    for (const [key, value] of Object.entries(puzzles).sort(sortPuzzles)) {
+        await loadMenuItem(key, value);
+    }
+    
+    // Refresh estimated storage usage
+    refreshStorageUsage();
 }
 
-// TODO: Load puzzle name and image from browser storage object
-// TODO: Support for grouping puzzles into folders. 
-function loadMenuItem(id) {
+// Sort folders before puzzles and then alpha order title
+// @param [aK, aV] - [string, string] - [puzzle/folder ID, title]
+// @param [bK, bV] - [string, string] - [puzzle/folder ID, title]
+function sortPuzzles([aK,aV],[bK,bV]) {
+    // First character of key is 'f' for folder or 'p' for puzzle
+    if (aK.charAt(0) < bK.charAt(0)) {
+        return -1;
+    } else if (aK.charAt(0) > bK.charAt(0)) {
+        return 1;
+    }
+
+    return aV.localeCompare(bV);
+}
+
+async function loadMenuItem(id, title) {
+    var isFolder = id.startsWith("f");
+
     // Create menu item container
     var menuItem = window.document.createElement('div');
     menuItem.className = "menuItem";
+    menuItem.draggable = !isFolder;
     menuItem.id = id;
-    menuItem.addEventListener("click", function(){ startPuzzle(id) });
+    menuItem.addEventListener("click", function(){ 
+        if (isFolder) {
+            ACTIVE_FID = id;
+            loadMainMenu();
+        } else {
+            startPuzzle(id);
+        }
+    });
+    if (isFolder) {
+        menuItem.addEventListener("dragover", function(event){ 
+            event.preventDefault();
+        });
+        menuItem.addEventListener("drop", function(event){ 
+            event.preventDefault();
+            var pid = event.dataTransfer.getData("text");
+            movePuzzle(ACTIVE_FID, event.target.id, pid);
+            document.getElementById(pid).remove();
+        });
+    } else {
+        menuItem.addEventListener("dragstart", function(event){
+            event.dataTransfer.setData("text", event.target.id);
+            this.classList.add("dragging");
+        });
+        menuItem.addEventListener("dragend", function(event){ 
+            this.classList.remove("dragging");
+        });
+    }
 
     // Create menu item header
     var itemHeaderDiv = window.document.createElement('div');
@@ -47,18 +107,94 @@ function loadMenuItem(id) {
     // Create menu item title
     var itemTitleSpan = window.document.createElement('span');
     itemTitleSpan.className = "menuItemTitle";
-    itemTitleSpan.textContent = id;
-    itemTitleSpan.title = id;
+    itemTitleSpan.textContent = title;
+    itemTitleSpan.title = title;
     menuItem.appendChild(itemTitleSpan);
-    
-    // TODO: Load the 175px x 175px version of the user uploaded base64 image as the background.
-    //var base64Icon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAIAAACRXR/mAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBNYWNpbnRvc2giIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6RDUxRjY0ODgyQTkxMTFFMjk0RkU5NjI5MEVDQTI2QzUiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6RDUxRjY0ODkyQTkxMTFFMjk0RkU5NjI5MEVDQTI2QzUiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDpENTFGNjQ4NjJBOTExMUUyOTRGRTk2MjkwRUNBMjZDNSIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDpENTFGNjQ4NzJBOTExMUUyOTRGRTk2MjkwRUNBMjZDNSIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PuT868wAAABESURBVHja7M4xEQAwDAOxuPw5uwi6ZeigB/CntJ2lkmytznwZFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYW1qsrwABYuwNkimqm3gAAAABJRU5ErkJggg==";
-    //menuItem.style.backgroundImage = "url('" + base64Icon + "')";
-    menuItem.style.backgroundImage = "url('assets/Screenshot 2024-03-28 103842-canvas.png')";
+
+    // If the item is a folder, show the folder image. Otherwise show the custom puzzle portrait
+    if (isFolder) {
+        menuItem.style.backgroundImage = "url('assets/folder.png')";
+    } else {
+        const filename = id + "preview.png";
+        const png = await readFile("puzzles", filename);
+        menuItem.style.backgroundImage = "url('" + URL.createObjectURL(png) + "')";
+    }
 
     // Add menu item to menu grid
     var mainMenu = document.getElementById("mainMenu");
     mainMenu.appendChild(menuItem);
+}
+
+function createFolder() {
+    // Create overlay to capture folder name
+    var overlayDiv = window.document.createElement('div');
+    overlayDiv.className = "createFolderOverlay";
+
+    // Create the header
+    var header = window.document.createElement('div');
+    header.className = "createFolderOverlayHeader";
+    overlayDiv.appendChild(header);
+    
+    // Create the title
+    var title = window.document.createElement('span');
+    title.className = "createFolderOverlayTitle";
+    title.innerText = "Create a new folder";
+    overlayDiv.appendChild(title);
+
+    // Create the text input label to capture the folder name
+    var label = window.document.createElement('label');
+    label.className = "createFolderOverlayInput";
+    label.innerText = "Name ";
+    overlayDiv.appendChild(label);
+
+    // Create text input to capture folder name
+    var input = window.document.createElement('input');
+    input.id = "createFolderName";
+    input.className = "createFolderName";
+    input.type = "text";
+    input.maxLength = 20;
+    input.addEventListener("keyup", function(event){ 
+        // Disable create button when no name is provided
+        var createButton = document.getElementById("createButton");
+        createButton.disabled = this.value.trim().length == 0;
+
+        // Auto submit on enter key
+        if (event.key === 'Enter') {
+            createButton.click();
+        }
+    });
+    label.appendChild(input);
+
+    // Create button to create folder
+    var createButton = window.document.createElement('button');
+    createButton.id = "createButton";
+    createButton.className = "createFolderOverlayButton";
+    createButton.disabled = true;
+    createButton.innerText = "Create folder";
+    createButton.addEventListener("click", function(){ 
+        let fid = getAndIncrementNextFolderID();
+        var name = document.getElementById("createFolderName").value;
+        addFolder(fid, name);
+
+        overlayDiv.remove();
+
+        // TODO: Consider manually inserting the new DOM folder instead of reloading them all.
+        // Need to determine where to insert it for alpha order of folders
+        loadMainMenu();
+    });
+    overlayDiv.appendChild(createButton);
+
+    // Cancel button to exit folder creation
+    var cancelButton = window.document.createElement('button');
+    cancelButton.innerText = "Cancel";
+    cancelButton.addEventListener("click", function(){ overlayDiv.remove(); });
+    overlayDiv.appendChild(cancelButton);
+
+    // Add the div to the body to display it
+    document.body.appendChild(overlayDiv);
+    
+    // Change focus to the name input
+    input.focus();
 }
 
 function startPuzzle(id) {
@@ -75,12 +211,16 @@ function createPuzzle() {
     var fileOpener = document.getElementById("fileOpener");
     
     // Register post-image selection work
-    fileOpener.addEventListener("change", function() {
+    fileOpener.addEventListener("change", function(){
         if (fileOpener.files.length > 0) {
             // Default title to file name
             var createPuzzleName = document.getElementById("createPuzzleName");
             createPuzzleName.value = formatTitle(fileOpener.files[0].name);
-            
+            setTimeout(function() { 
+                createPuzzleName.focus(); 
+                createPuzzleName.click();
+            }, 50);
+
             // Populate the image preview
             var createPuzzlePreview = document.getElementById("createPuzzlePreview");
             createPuzzlePreview.src = URL.createObjectURL(fileOpener.files[0]);
@@ -103,22 +243,62 @@ function createPuzzle() {
 }
 
 function cropImage() {
-    cropper = new Croppr('#createPuzzlePreview', {
+    CROPPER = new Croppr('#createPuzzlePreview', {
         minSize: { width: 175, height: 175 },
     });
     
     // Due to a bug somewhere in the Croppr lib, a reset after rendering is required to catch the correct sizing of the parent container
-    setTimeout(function() { cropper.reset(); }, 100);
+    setTimeout(function() { CROPPER.reset(); }, 100);
 }
 
 function destroyCropper() {
-    if (cropper) {
-        cropper.destroy();
-        cropper = null;
+    if (CROPPER) {
+        CROPPER.destroy();
+        CROPPER = null;
     }
 }
 
-function makePuzzle() {
+// TODO: Change this function to be called on initial JS load. Put a warning icon in the top right corner if this function returns false.
+//       Move the alert text to an onclick of the warning icon.
+async function configurePersistedStorage() {
+    
+    // Check if site's storage has been marked as persistent
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persisted();
+        if (isPersisted) {
+            return;
+        }
+
+        const isPersist = await navigator.storage.persist();
+        if (isPersist) {
+            return;
+        }
+
+        alert("Detected persisted browser storage is off. Although unlikely, puzzles could be deleted. Export regularly to keep a backup.");
+        return;
+    }
+}
+
+function refreshStorageUsage() {
+    navigator.storage.estimate().then((estimate) => {
+        var percent = ((estimate.usage / estimate.quota) * 100).toFixed(2) + "%";
+        var quota = (estimate.quota / 1024 / 1024).toFixed(2);
+        if (quota < 1024) {
+            quota += "MB";
+         } else {
+            quota = (quota / 1024).toFixed(2);
+            if (quota < 1024) {
+                quota += "GB";
+            } else {
+                quota = (quota / 1024).toFixed(2);
+                quota += "TB";
+            }
+        }
+        document.getElementById("diskSpaceText").innerText = "Disk space: " + percent + " of " + quota;
+    });
+}
+
+async function makePuzzle() {
     // Verify the user provided a name for the puzzle
     var createPuzzleName = document.getElementById("createPuzzleName");
     if (createPuzzleName.value.trim() == "") {
@@ -127,36 +307,42 @@ function makePuzzle() {
     }
 
     // Grab the crop details from the user
-    var cropSize = cropper.getValue();
+    var cropSize = CROPPER.getValue();
 
     // TODO: Consider setting a minimum standard for final image size
 
     // Destroy cropper for resource cleanup
     destroyCropper();
 
-    // Generate the cropped base64 images(Full size and preview)
-    var imagesBase64 = cropImageTo(cropSize);
+    // Generate the unique puzzle ID
+    const pid = getAndIncrementNextPuzzleID();
 
-    // Store the puzzle in browser storage
-    // 1) Title
+    // Generate the cropped puzzle images (Full size and preview)
+    await generatePuzzleImages(pid, cropSize);
+
+    // Save the new puzzle
     var title = createPuzzleName.value.trim();
-
-    // 2) Puzzle image
-    var image = imagesBase64[0]
-
-    // 3) Puzzle image resized and cropped to 175px x 175px for preview
-    var preview = imagesBase64[1]
-    
-    // TODO: Create the browser store object
-    // TODO: Then update loadMainMenu() to read those stored objects
-    // TODO: Then update loadMenuItem() to load the 1:1 preview image on the items
+    addPuzzle(ACTIVE_FID, pid, title);
 
     // Reload the puzzles to include the new entry
-    loadMainMenu();
+    await loadMainMenu();
 
     // Transition to the main menu
     displayPage("page2", false);
-    setTimeout(function(){displayPage("page1", true)}, 500);
+    setTimeout(function(){displayPage("page1", true)}, 600);
+}
+
+// @param canvas - HTML5 canvas
+// @param dir - string - directory to save image in
+async function saveCanvasToPng(canvas, dir, filename) {
+    // Convert canvas to PNG blob
+    const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+    // Create a new filehandle
+    var newFile = await createFile(dir, filename);
+
+    // Write the blob to file
+    await writeFile(newFile, pngBlob);
 }
 
 function cancelPuzzle() {
@@ -166,7 +352,7 @@ function cancelPuzzle() {
 
         // Transition to the main menu
         displayPage("page2", false);
-        setTimeout(function(){displayPage("page1", true)}, 500);
+        setTimeout(function(){displayPage("page1", true)}, 600);
     }
 }
 
@@ -190,6 +376,7 @@ function formatTitle(title) {
     return title;
 }
 
+// @param id - string - DOM id
 // @param show - boolean
 function displayPage(id, show) {
     var page = document.getElementById(id);
@@ -198,15 +385,17 @@ function displayPage(id, show) {
     }
     page.classList.remove(show ? "hidden" : "visible");
     page.classList.add(show ? "visible" : "hidden");
+
+    // Wait 550ms for the CSS transition to complete, then run cleanup
     if (!show) {
-        setTimeout(function(){page.style.display = "none";}, 500)
+        setTimeout(function() { page.style.display = "none"; }, 550);
     }
 }
 
+// @input pid - integer - puzzle ID
 // @input dimensions - {x, y, width, height}
-// @return [full image in base64, preview image in base64]
-function cropImageTo(dimensions) {
-    // Get the image
+async function generatePuzzleImages(pid, dimensions) {
+    // Get the user selected image
     const image = document.getElementById('createPuzzlePreview');
 
     // Verify passed dimensions against image size
@@ -234,8 +423,10 @@ function cropImageTo(dimensions) {
     // Draw the image on the canvas
     ctx.drawImage(image, dimensions.x, dimensions.y, dimensions.width, dimensions.height);
 
-    // Save the canvas as a base64 encoded image
-    var imageBase64 = canvas.toDataURL('image/png');
+    // Save the canvas as a png image
+    //var imageBase64 = canvas.toDataURL('image/png');
+    const png1 = pid + ".png";
+    await saveCanvasToPng(canvas, "puzzles", png1);
 
     // Set the canvas ratio to 1:1 for preview image
     var previewSize = Math.min(dimensions.width, dimensions.height);
@@ -245,16 +436,10 @@ function cropImageTo(dimensions) {
     // Determine the shift for the larger dimension so the crop happens evenly on each side
     var dx, dy;
     if (dimensions.width < dimensions.height) {
-        // Width already properly sized
         dx = 0;
-
-        // Make the adjustment and divide by 2 since we'll crop half from each side of the image
         dy = (dimensions.height - dimensions.width) / 2;
     } else {
-        // Make the adjustment and divide by 2 since we'll crop half from each side of the image
         dx = (dimensions.width - dimensions.height) / 2;
-
-        // Height already properly sized
         dy = 0;
     }
 
@@ -262,7 +447,12 @@ function cropImageTo(dimensions) {
     ctx.drawImage(image, dimensions.x + dx, dimensions.y + dy, dimensions.width - (dx * 2), dimensions.height - (dy * 2), 0, 0, previewSize, previewSize);
 
     // Save the canvas as a base64 encoded image
-    var imagePreviewBase64 = canvas.toDataURL('image/png');
+    //var imagePreviewBase64 = canvas.toDataURL('image/png');
+    const png2 = pid + "preview.png";
+    await saveCanvasToPng(canvas, "puzzles", png2)
+}
 
-    return [imageBase64, imagePreviewBase64];
+function toggleDiskSpaceText() {
+    var diskSpaceText = document.getElementById("diskSpaceText");
+    diskSpaceText.style.display = diskSpaceText.style.display !== "inline" ? "inline" : "none";
 }
