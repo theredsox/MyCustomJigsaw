@@ -1,5 +1,6 @@
 // Priority TODOs
 // * Implement import and export buttons (Export to zip, import from zip)
+// * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
 // * Add a Rename button 
 // * Create the start game overlay (number of pieces, allow rotating, and advanced options like shape uniformity)
 // * Create the game board and initialize the pieces
