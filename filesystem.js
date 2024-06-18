@@ -42,3 +42,9 @@ async function readFile(dir, filename) {
     const file = await currentDir.getFileHandle(filename);
     return await file.getFile();
 }
+
+async function deleteFile(dir, filename) {
+    const rootDir = await getRootDirectory();
+    const currentDir = await rootDir.getDirectoryHandle(dir);
+    return await currentDir.removeEntry(filename);
+}

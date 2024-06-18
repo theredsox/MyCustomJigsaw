@@ -63,9 +63,12 @@ function deletePuzzle(fid, pid) {
 
 // @param fid - string - folder ID
 function deleteFolder(fid) {
+    // Remove folder from root
     let puzzles = getPuzzles("root");
     delete puzzles[fid];
     savePuzzles("root", puzzles);
+    // Remove the puzzles in the folder
+    localStorage.removeItem("puzzles_" + fid);
 }
 
 // @param fromFid - string - folder ID to move from

@@ -1,10 +1,4 @@
 // Priority TODOs
-// * Better text input field CSS
-// * Implement delete button
-// * A way to navigate back to the root folder and know which folder you are in
-// * A way to pull a puzzle out to the root folder, drag it to the navigate back button maybe
-// * Hide create folder button when not in root folder
-// * When hovering a puzzle over a folder, add a CSS class on the folder to make it "glow"
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Add a Rename button 
 // * Create the start game overlay (number of pieces, allow rotating, and advanced options like shape uniformity)
@@ -14,8 +8,9 @@
 // * Create a help menu (describes controls; drag and drop and mouse/keys for when playing)
 // * Create a first pass at stat tracking
 // * Advanced play options - auto-sorting by shape/color onto board or into buckets
+// * Add handling of filesystem.js exceptions so that menu's continue to load if a file is missing and that an error is raised if a failure happens saving any of the images during puzzle creation
 // * BUG: Determine why fade out for pages works, but fade in happens fast. Maybe try non-CSS opacity fade, display none, display, opacity reveal
-
+// * Add loading message for puzzle creation (and maybe other areas)
 
 // Tracks the active folder for the puzzle menu
 var ACTIVE_FID = "root";
@@ -45,6 +40,10 @@ async function loadMainMenu() {
         await loadMenuItem(key, value);
     }
     
+    // Folder button text update
+    let text = (ACTIVE_FID != "root" ? "Return Home" : "Create Folder");
+    document.getElementById("createFolderButton").innerText = text;
+
     // Refresh estimated storage usage
     refreshStorageUsage();
 }
@@ -71,7 +70,19 @@ async function loadMenuItem(id, title) {
     menuItem.className = "menuItem";
     menuItem.draggable = !isFolder;
     menuItem.id = id;
-    menuItem.addEventListener("click", function(){ 
+    menuItem.addEventListener("click", function(){
+        // If in delete mode, toggle checked and disable dragging
+        let checkbox = this.querySelector(".menuItemDelete");
+        if (checkbox.checkVisibility()) {
+            checkbox.checked = !checkbox.checked;
+            checkbox.checked ? this.classList.add("menuItemChecked") : this.classList.remove("menuItemChecked");
+
+            // Update delete button text
+            let deleteButton = document.getElementById("deleteButton");
+            const count = document.querySelectorAll(".menuItemChecked").length;
+            deleteButton.innerText = "Delete (" + count + ")";
+            return;
+        }
         if (isFolder) {
             ACTIVE_FID = id;
             loadMainMenu();
@@ -82,20 +93,54 @@ async function loadMenuItem(id, title) {
     if (isFolder) {
         menuItem.addEventListener("dragover", function(event){ 
             event.preventDefault();
+            menuItem.classList.add("dropTargetHighlight");
+        });
+        menuItem.addEventListener("dragleave", function(event){ 
+            menuItem.classList.remove("dropTargetHighlight");
         });
         menuItem.addEventListener("drop", function(event){ 
             event.preventDefault();
             var pid = event.dataTransfer.getData("text");
             movePuzzle(ACTIVE_FID, event.target.id, pid);
             document.getElementById(pid).remove();
+            menuItem.classList.remove("dropTargetHighlight");
         });
     } else {
         menuItem.addEventListener("dragstart", function(event){
             event.dataTransfer.setData("text", event.target.id);
             this.classList.add("dragging");
+
+            if (ACTIVE_FID != "root") {
+                // Turn the folder button into a drop point for moving a puzzle home
+                let createFolderButton = document.getElementById("createFolderButton");
+                createFolderButton.innerText = "Move Puzzle to Home";
+                createFolderButton.ondragover = function(event){ 
+                    event.preventDefault();
+                    createFolderButton.classList.add("dropTargetHighlight");
+                };
+                createFolderButton.ondragleave = function(event){ 
+                    createFolderButton.classList.remove("dropTargetHighlight");
+                }
+                createFolderButton.ondrop = function(event){ 
+                    event.preventDefault();
+                    var pid = event.dataTransfer.getData("text");
+                    movePuzzle(ACTIVE_FID, "root", pid);
+                    document.getElementById(pid).remove();
+                    createFolderButton.classList.remove("dropTargetHighlight");
+                };
+            }
         });
         menuItem.addEventListener("dragend", function(event){ 
             this.classList.remove("dragging");
+
+            if (ACTIVE_FID != "root") {
+                // Turn the folder button back into return home
+                let createFolderButton = document.getElementById("createFolderButton");
+                createFolderButton.innerText = "Return Home";
+                createFolderButton.ondragover = null;
+                createFolderButton.ondragleave = null;
+                createFolderButton.ondrop = null;
+            }
         });
     }
 
@@ -104,6 +149,12 @@ async function loadMenuItem(id, title) {
     itemHeaderDiv.className = "menuItemHeader";
     menuItem.appendChild(itemHeaderDiv);
     
+    // Create menu item delete checkbox
+    var itemDeleteInput = window.document.createElement('input');
+    itemDeleteInput.className = "menuItemDelete";
+    itemDeleteInput.type = "checkbox";
+    itemHeaderDiv.appendChild(itemDeleteInput);
+
     // Create menu item title
     var itemTitleSpan = window.document.createElement('span');
     itemTitleSpan.className = "menuItemTitle";
@@ -170,7 +221,7 @@ function createFolder() {
     createButton.id = "createButton";
     createButton.className = "createFolderOverlayButton";
     createButton.disabled = true;
-    createButton.innerText = "Create folder";
+    createButton.innerText = "Create";
     createButton.addEventListener("click", function(){ 
         let fid = getAndIncrementNextFolderID();
         var name = document.getElementById("createFolderName").value;
@@ -197,6 +248,78 @@ function createFolder() {
     input.focus();
 }
 
+async function returnHome() {
+    ACTIVE_FID = "root";
+    await loadMainMenu();
+}
+
+function deletePuzzlesMode() {
+    // Update menu buttons
+    document.getElementById("createPuzzleButton").disabled = true;
+    document.getElementById("createFolderButton").disabled = true;
+    document.getElementById("deleteButton").innerText = "Delete (0)";
+    document.getElementById("cancelButton").classList.remove("hidden");
+
+    // Show the checkboxes
+    let checkboxes = document.getElementsByClassName("menuItemDelete");
+    for (let checkbox of checkboxes) {
+        checkbox.style.display = "inline";
+    }
+    // Disable dragging for puzzles
+    let items = document.getElementsByClassName("menuItem");
+    for (let item of items) {
+        if (item.id.charAt(0) == "p") {
+            item.draggable = false;
+        }
+    }
+}
+
+function deletePuzzles() {
+    let itemsToDelete = document.querySelectorAll(".menuItemChecked");
+    if (confirm("Are you sure you want to delete " + itemsToDelete.length + " entries?") === true) {
+        // Delete chosen folders/puzzles, their related image files, and remove them from the menu
+        for (let item of itemsToDelete) {
+            let menuItem = item.closest(".menuItem");
+            if (menuItem.id.charAt(0) == "f") {
+                let puzzles = getPuzzles(menuItem.id);
+                for (const [id, title] of Object.entries(puzzles)) {
+                    deleteFile("puzzles", id + ".png");
+                    deleteFile("puzzles", id + "preview.png");
+                    deletePuzzle(menuItem.id, id);
+                }
+                deleteFolder(menuItem.id);
+            } else {
+                deleteFile("puzzles", menuItem.id + ".png");
+                deleteFile("puzzles", menuItem.id + "preview.png");
+                deletePuzzle(ACTIVE_FID, menuItem.id);
+            }
+            menuItem.remove();
+        }
+        deletePuzzlesCancel();
+    }
+}
+
+function deletePuzzlesCancel() {
+    // Update menu buttons
+    document.getElementById("createPuzzleButton").disabled = false;
+    document.getElementById("createFolderButton").disabled = false;
+    document.getElementById("deleteButton").innerText = "Delete";
+    document.getElementById("cancelButton").classList.add("hidden");
+    
+    // Hide the checkboxes
+    let checkboxes = document.getElementsByClassName("menuItemDelete");
+    for (let checkbox of checkboxes) {
+        checkbox.style.display = "none";
+    }
+    // Enable dragging for puzzles
+    let items = document.getElementsByClassName("menuItem");
+    for (let item of items) {
+        if (item.id.charAt(0) == "p") {
+            item.draggable = true;
+        }
+    }
+}
+
 function startPuzzle(id) {
     // Transition to the play board
     displayPage("page1", false);
@@ -217,8 +340,7 @@ function createPuzzle() {
             var createPuzzleName = document.getElementById("createPuzzleName");
             createPuzzleName.value = formatTitle(fileOpener.files[0].name);
             setTimeout(function() { 
-                createPuzzleName.focus(); 
-                createPuzzleName.click();
+                createPuzzleName.focus();
             }, 50);
 
             // Populate the image preview
@@ -228,7 +350,7 @@ function createPuzzle() {
             // TODO: If image resolution is too small, kick back to main menu page and alert user to choose a different image
 
             // Instanciate the image cropper tool
-            setTimeout(cropImage, 100);
+            setTimeout(cropImage, 300);
  
             // Show the create puzzle page
             displayPage("page2", true);
@@ -346,14 +468,12 @@ async function saveCanvasToPng(canvas, dir, filename) {
 }
 
 function cancelPuzzle() {
-    if (confirm("Are you sure you want to leave without saving your new puzzle?") === true) {
-        // Destroy cropper for resource cleanup
-        destroyCropper()
+    // Destroy cropper for resource cleanup
+    destroyCropper()
 
-        // Transition to the main menu
-        displayPage("page2", false);
-        setTimeout(function(){displayPage("page1", true)}, 600);
-    }
+    // Transition to the main menu
+    displayPage("page2", false);
+    setTimeout(function(){displayPage("page1", true)}, 600);
 }
 
 // @input title - string
@@ -371,9 +491,9 @@ function formatTitle(title) {
         .join(" ");
     
     // Trim to 20 character limit
-    title = title.substring(0, 20)
+    title = title.substring(0, 20);
 
-    return title;
+    return title.trim();
 }
 
 // @param id - string - DOM id

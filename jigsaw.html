@@ -4,7 +4,6 @@
 <head>
    <meta charset="UTF-8">
    <title>My Custom Jigsaw Puzzles</title>
-   <script src="https://kit.fontawesome.com/9166e05a8a.js" crossorigin="anonymous"></script>
    <script type="text/javascript" src="localstorage.js"></script>
    <script type="text/javascript" src="filesystem.js"></script>
    <script type="text/javascript" src="jigsaw.js"></script>
@@ -19,11 +18,10 @@
         <div id="page1" class="page visible">
             <div id="mainMenu" class="mainMenu">
                 <div class="menuOptions">
-                    <button onclick="createPuzzle()">Create Puzzle</button>
-                    <button onclick="createFolder()">Create Folder</button>
-                    <button onclick="deletePuzzles()">Delete</button>
-                    <button onclick="importPuzzles()">Import</button>
-                    <button onclick="exportPuzzles()">Export</button>
+                    <button id="createPuzzleButton" onclick="createPuzzle()">Create Puzzle</button>
+                    <button id="createFolderButton" onclick="ACTIVE_FID != 'root' ? returnHome() : createFolder()">Create Folder</button>
+                    <button id="deleteButton" onclick="this.innerText == 'Delete' ? deletePuzzlesMode() : deletePuzzles()">Delete</button>
+                    <button id="cancelButton" class="hidden" onclick="deletePuzzlesCancel()">Cancel</button>
                 </div>
             </div>
         </div>
@@ -33,7 +31,7 @@
                 <span class="createPuzzleTitle">Create a new puzzle</span>
                 <label class="createPuzzleInput" for="createPuzzleName">
                     Title 
-                    <input id="createPuzzleName" type="text" maxlength="20" onclick="this.setSelectionRange(0, this.value.length)"/>
+                    <input id="createPuzzleName" class="createPuzzleName" type="text" maxlength="20" onfocus="this.setSelectionRange(0, this.value.length)"/>
                 </label>
                 <div class="createPuzzleInput">
                     <img id="createPuzzlePreview" class="createPuzzlePreview" src="#" alt="Chosen image" />
@@ -44,9 +42,15 @@
         </div>
     </div>
     <input id="fileOpener" type="file" accept="image/png, image/gif, image/jpeg, image/webp" style="display: none" />
-    <div id="diskSpace" class="diskSpace" onclick="toggleDiskSpaceText()">
-        <i class="fa-regular fa-floppy-disk"></i>
+    <div id="diskSpace" class="diskSpace" onclick="toggleDiskSpaceText()" title="Disk usage">
+        <img src="assets/diskspace.png" />
         <span id="diskSpaceText" class="diskSpaceText"></span>
+    </div>
+    <div id="export" class="export" onclick="exportPuzzles()" title="Export all puzzles">
+        <img src="assets/export.png" />
+    </div>
+    <div id="import" class="import" onclick="importPuzzles()" title="Import puzzles from a .zip export file">
+        <img src="assets/import.png" />
     </div>
 </body>
 
