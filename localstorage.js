@@ -5,9 +5,15 @@
 // Description of keys:
 // "nextPuzzleID" - integer - tracks the number of puzzles created
 // "nextFolderID" - integer - tracks the number of folders created
-// "puzzles_root" - JSON - tracks the puzzles that exist at the root menu level. EX: { PID:title, FID:name }
-// "puzzles_" + FID - JSON - tracks the puzzles that exist in that folder. Folders cannot be nested. EX: { PID:title, PID:title }
+// "puzzles_root" - JSON - tracks the puzzles that exist at the root menu level. EX: { PID:{}, FID:name }
+// "puzzles_" + FID - JSON - tracks the puzzles that exist in that folder. Folders cannot be nested. EX: { PID:{}, PID:{} }
 // "stats_" + PID - JSON - tracks stats for the puzzle. TODO: determine structure (# of times completed and best time, per difficulty)
+//
+// Puzzle Object
+// {
+//      title: string
+//      aspectRatio: [number, number] - [x, y]
+// }
 
 function getAndIncrementNextPuzzleID() {
     let id = parseInt(localStorage.getItem("nextPuzzleID") || "0");
@@ -22,23 +28,44 @@ function getAndIncrementNextFolderID() {
 }
 
 // @param fid - string - folder ID
-// @return JSON - { PID:title, FID:name }
+// @return JSON - { PID:{}, FID:name }
 function getPuzzles(fid) {
     return JSON.parse(localStorage.getItem("puzzles_" + fid) || "{}");
 }
 
 // @param fid - string - folder ID
-// @param json - JSON - { PID:title, FID:name }
+// @param pid - string - pizzle ID
+// @return JSON - {}
+function getPuzzle(fid, pid) {
+    let puzzles = getPuzzles(fid);
+    return puzzles[pid];
+}
+
+// @param fid - string - folder ID
+// @param json - JSON - { PID:{}, FID:name }
 function savePuzzles(fid, json) {
     localStorage.setItem("puzzles_" + fid, json ? JSON.stringify(json) : "{}");
 }
 
 // @param fid - string - folder ID
 // @param pid - string - puzzle ID
-// @param title - string - puzzle title
-function addPuzzle(fid, pid, title) {
+// @param puzzle - {} - puzzle object
+function savePuzzle(fid, pid, puzzle) {
     let puzzles = getPuzzles(fid);
-    puzzles[pid] = title;
+    puzzles[pid] = puzzle;
+    savePuzzles(fid, puzzles);
+}
+
+// @param fid - string - folder ID
+// @param pid - string - puzzle ID
+// @param title - string - puzzle title
+// @param aspectRatio - [number, number] - image aspect ratio in [x, y]
+function savePuzzleFromAttrs(fid, pid, title, aspectRatio) {
+    let puzzles = getPuzzles(fid);
+    puzzles[pid] = {
+        title: title,
+        aspectRatio: aspectRatio
+    };
     savePuzzles(fid, puzzles);
 }
 
@@ -52,13 +79,13 @@ function addFolder(fid, name) {
 
 // @param fid - string - folder ID
 // @param pid - string - puzzle ID
-// @return string - deleted puzzle title
+// @return string - deleted puzzle object {}
 function deletePuzzle(fid, pid) {
     let puzzles = getPuzzles(fid);
-    let title = puzzles[pid];
+    let puzzle = puzzles[pid];
     delete puzzles[pid];
     savePuzzles(fid, puzzles);
-    return title;
+    return puzzle;
 }
 
 // @param fid - string - folder ID
@@ -75,6 +102,6 @@ function deleteFolder(fid) {
 // @param toFid - string - folder ID to move to
 // @param pid - string - puzzle ID to move
 function movePuzzle(fromFid, toFid, pid) {
-    let title = deletePuzzle(fromFid, pid);
-    addPuzzle(toFid, pid, title);
+    let puzzle = deletePuzzle(fromFid, pid);
+    savePuzzle(toFid, pid, puzzle);
 }

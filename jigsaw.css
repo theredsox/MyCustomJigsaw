@@ -54,7 +54,7 @@ input[type="checkbox"] {
     width: 100%;
 }
 
-.menuOptions > button, .createPuzzle > button, .createFolderOverlay > button {
+.menuOptions > button, .createPuzzle > button, .createFolderOverlay > button, .playOverlay > button {
     background-color: #007eec;
     border: 1px solid #0460b1;
     border-radius: 4px;
@@ -69,7 +69,6 @@ input[type="checkbox"] {
     text-align: center;
     touch-action: manipulation;
     transform: translateY(0);
-    transition: transform 150ms, box-shadow 150ms;
     user-select: none;
     -webkit-user-select: none;
 }
@@ -77,6 +76,7 @@ input[type="checkbox"] {
 .menuOptions > button:hover:not([disabled]), 
 .createPuzzle > button:hover:not([disabled]), 
 .createFolderOverlay > button:hover:not([disabled]),
+.playOverlay > button:hover:not([disabled]),
 .diskSpace:hover:not([disabled]),
 .import:hover:not([disabled]),
 .export:hover:not([disabled]) {
@@ -84,7 +84,7 @@ input[type="checkbox"] {
   transform: translateY(-1px);
 }
 
-.menuOptions > button:disabled, .createPuzzle > button:disabled, .createFolderOverlay > button:disabled {
+.menuOptions > button:disabled, .createPuzzle > button:disabled, .createFolderOverlay > button:disabled, .playOverlay > button:disabled {
   border: 1px solid #999999;
   background-color: #cccccc;
   color: #666666;
@@ -97,10 +97,8 @@ input[type="checkbox"] {
     background-position: center center;
     background-repeat: no-repeat;
     background-size: cover;
-    list-style-type: none;
     border: 1px solid #0460b1;
-    max-width: 175px;
-    min-width: 175px;
+    list-style-type: none;
     position: relative;
     width: 175px;
 }
@@ -223,7 +221,6 @@ input[type="checkbox"] {
     top: 5px;
     touch-action: manipulation;
     transform: translateY(0);
-    transition: transform 150ms, box-shadow 150ms;
     user-select: none;
     -webkit-user-select: none;
 }
@@ -258,7 +255,6 @@ input[type="checkbox"] {
     top: 5px;
     touch-action: manipulation;
     transform: translateY(0);
-    transition: transform 150ms, box-shadow 150ms;
     user-select: none;
     -webkit-user-select: none;
 }
@@ -279,7 +275,6 @@ input[type="checkbox"] {
     top: 5px;
     touch-action: manipulation;
     transform: translateY(0);
-    transition: transform 150ms, box-shadow 150ms;
     user-select: none;
     -webkit-user-select: none;
 }
@@ -346,4 +341,43 @@ input[type="checkbox"] {
     box-shadow: 0 0 5px 3px #0066bf,
                 0 0 10px 3px #caccec !important;
     transform: translateY(-2px) !important;
+}
+
+.playOverlay {
+    left: 50% !important;
+    margin: -175px 0 0 -175px;
+    top: 50% !important;
+    transition: height 1s, left 1s, margin 1s, top 1s, width 1s;
+    width: 350px;
+}
+
+.playOverlay:hover {
+    box-shadow: none;
+    cursor: auto;
+    transform: none;
+}
+
+.playOverlayHidden {
+    visibility: hidden;
+    opacity: 0;
+    transition: visibility 0s 1s, opacity 1s linear;
+}
+
+.playOverlayVisible {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 1s linear;
+}
+
+.playOverlayLabel {
+    display: block;
+    margin: 5px;
+}
+
+.playOverlayOrientationSpan {
+    font-size: 14px;
+}
+
+.playOverlayButton {
+    margin: 5px;
 }

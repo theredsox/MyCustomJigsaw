@@ -1,23 +1,45 @@
 // Priority TODOs
+//
+// * In start game overlay, change the two dropdowns to better UI elements. Dropdowns aren't easy for mobile devices.
+// * Allow selection of ratio on 'create a puzzle' menu. Right now hardcoded to 3:2 for CROPPER.
+// * Add background "covers" to avoid  users interacting with background items when on an overlay (create puzzle, create folder, play menu)
+// * Create the game board and initialize the pieces
+// * Initial play functionality (snap pieces, rotate pieces, puzzle image for reference, zoom, buckets, sound on/off)
+// * Controls: left click+drag = move, right click = zoom on piece, left click+alt = rotate, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select pieces in area
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
 // * Add a Rename button 
-// * Create the start game overlay (number of pieces, allow rotating, and advanced options like shape uniformity)
-// * Create the game board and initialize the pieces
-// * Initial play functionality (snap pieces, rotate pieces, puzzle image for reference, zoom, buckets, sound on/off)
-// * Controls: left click+drag = move, right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select pieces in area
 // * Create a help menu (describes controls; drag and drop and mouse/keys for when playing)
 // * Create a first pass at stat tracking
 // * Advanced play options - auto-sorting by shape/color onto board or into buckets
 // * Add handling of filesystem.js exceptions so that menu's continue to load if a file is missing and that an error is raised if a failure happens saving any of the images during puzzle creation
 // * BUG: Determine why fade out for pages works, but fade in happens fast. Maybe try non-CSS opacity fade, display none, display, opacity reveal
-// * Add loading message for puzzle creation (and maybe other areas)
+// * Add loading message for puzzle creation (and maybe other areas like waiting on puzzle images)
 
 // Tracks the active folder for the puzzle menu
 var ACTIVE_FID = "root";
 
 // Tracks the singleton image cropper object used for creating new puzzles
 var CROPPER;
+
+// Tracks the difficulty labels
+const DIFFICULTIES = [
+    "Have a moment",
+    "Commercial break", 
+    "Quick jaunt", 
+    "Break time", 
+    "Lazy afternoon", 
+    "Let's get serious", 
+    "Up all night", 
+    "Eat, sleep, jigsaw, repeat"
+];
+
+// Tracks the piece orientation labels
+const ORIENTATIONS = [
+    "Standard - No rotation",
+    "Intermediate (2x) - North, South", 
+    "Advanced (4x) - Cardinal"
+]
 
 window.onresize = function() {
     if (CROPPER) {
@@ -38,7 +60,7 @@ async function loadMainMenu() {
     // Load the saved puzzles
     let puzzles = getPuzzles(ACTIVE_FID);
     for (const [key, value] of Object.entries(puzzles).sort(sortPuzzles)) {
-        await loadMenuItem(key, value);
+        await loadMenuItem(key, value["title"] || value);
     }
     
     // Folder button text update
@@ -49,7 +71,7 @@ async function loadMainMenu() {
     refreshStorageUsage();
 }
 
-// Sort folders before puzzles and then alpha order title
+// Sort folders before puzzles, then alpha order puzzle title and folder name
 // @param [aK, aV] - [string, string] - [puzzle/folder ID, title]
 // @param [bK, bV] - [string, string] - [puzzle/folder ID, title]
 function sortPuzzles([aK,aV],[bK,bV]) {
@@ -60,6 +82,9 @@ function sortPuzzles([aK,aV],[bK,bV]) {
         return 1;
     }
 
+    if (aK.charAt(0) == "p") {
+        return aV["title"].localeCompare(bV["title"]);
+    }
     return aV.localeCompare(bV);
 }
 
@@ -71,7 +96,7 @@ async function loadMenuItem(id, title) {
     menuItem.className = "menuItem";
     menuItem.draggable = !isFolder;
     menuItem.id = id;
-    menuItem.addEventListener("click", function(){
+    menuItem.addEventListener("click", function(event){
         // If in delete mode, toggle checked and disable dragging
         let checkbox = this.querySelector(".menuItemDelete");
         if (checkbox.checkVisibility()) {
@@ -88,7 +113,7 @@ async function loadMenuItem(id, title) {
             ACTIVE_FID = id;
             loadMainMenu();
         } else {
-            startPuzzle(id);
+            loadPlayOverlay(this, id, event);
         }
     });
     if (isFolder) {
@@ -283,7 +308,7 @@ function deletePuzzles() {
             let menuItem = item.closest(".menuItem");
             if (menuItem.id.charAt(0) == "f") {
                 let puzzles = getPuzzles(menuItem.id);
-                for (const [id, title] of Object.entries(puzzles)) {
+                for (const id of Object.keys(puzzles)) {
                     deleteFile("puzzles", id + ".png");
                     deleteFile("puzzles", id + "preview.png");
                     deletePuzzle(menuItem.id, id);
@@ -321,16 +346,115 @@ function deletePuzzlesCancel() {
     }
 }
 
-function startPuzzle(id) {
-    // Transition to the play board
-    displayPage("page1", false);
+function loadPlayOverlay(menuItem, id, event) {
+    // Clone the menuItem to use as the play overlay
+    // Position it absolute right on top of its parent to start
+    var playOverlay = menuItem.cloneNode(true);
+    playOverlay.id = "playOverlay";
+    playOverlay.style.position = "absolute";
+    playOverlay.style.left = (event.pageX - event.offsetX) + "px";
+    playOverlay.style.top = (event.pageY - event.offsetY) + "px";
+    playOverlay.draggable = false;
+    playOverlay.onclick=null;
+    playOverlay.ondragstart=null;
+    playOverlay.ondragend=null;
 
-    // TODO: Show play options [Puzzle size (# of pieces), Allow rotating pieces? (yes/no), Piece shape uniformity (seed, tab size, jitter) (identical, high, medium, low)]
+    // Select for difficulty - # of pieces 
+    let difficultyLabel = window.document.createElement('label');
+    difficultyLabel.className = "playOverlayLabel playOverlayHidden";
+    difficultyLabel.for = "playOverlayDifficulty";
+    difficultyLabel.innerText = "Choose your difficulty";
+
+    let difficultySelect = window.document.createElement('select');
+    difficultySelect.id = "playOverlayDifficulty";
+    difficultySelect.className = "playOverlayDifficulty";
+    let puzzle = getPuzzle(ACTIVE_FID, id);
+    let difficulties = getDifficulties(puzzle["aspectRatio"]);
+    let index = 0;
+    for (let [pieces, dimensions] of Object.entries(difficulties)) {
+        let difficulty = window.document.createElement('option');
+        difficulty.value = dimensions; // [width]x[height] as string
+        difficulty.innerText = pieces + " pieces - " + DIFFICULTIES[index];
+        difficultySelect.appendChild(difficulty);
+        index++;
+    }
+    difficultyLabel.appendChild(difficultySelect);
+    playOverlay.appendChild(difficultyLabel);
+
+    // Select for Orientation of pieces
+    let orientationLabel = window.document.createElement('label');
+    orientationLabel.className = "playOverlayLabel playOverlayHidden";
+    orientationLabel.for = "playOverlayOrientation";
+    orientationLabel.innerText = "Puzzle piece orientation";
+
+    let orientationSelect = window.document.createElement('select');
+    orientationSelect.id = "playOverlayOrientation";
+    orientationSelect.className = "playOverlayOrientation";
+    for (let [index, label] of ORIENTATIONS.entries()) {
+        let orientation = window.document.createElement('option');
+        orientation.value = index;
+        orientation.innerText = label;
+        orientation.selected = (index == 0);
+        orientationSelect.appendChild(orientation);
+    }
+    orientationSelect.addEventListener("change", function() {
+        var span = document.getElementById("playOverlayOrientationSpan");
+        span.style.display = (this.value != 0 ? "inline" : "none");
+    });
+    orientationLabel.appendChild(orientationSelect);
+    playOverlay.appendChild(orientationLabel);
+
+    let orientationSpan = window.document.createElement('span');
+    orientationSpan.id = "playOverlayOrientationSpan";
+    orientationSpan.className = "playOverlayLabel playOverlayOrientationSpan playOverlayHidden";
+    orientationSpan.innerText = "* NOTE: Press [Alt] key while holding a piece to rotate";
+    orientationSpan.style.display = "none";
+    playOverlay.appendChild(orientationSpan);
+
+    // Play button
+    var playButton = window.document.createElement('button');
+    playButton.id = "playButton";
+    playButton.className = "playOverlayButton playOverlayHidden";
+    playButton.innerText = "Play now";
+    playButton.addEventListener("click", function(){ 
+        // TODO: Hide play overlay, hide page 1, and then show page 3 (the play board)
+    });
+    playOverlay.appendChild(playButton);
+
+    // Cancel button to exit folder creation
+    var cancelButton = window.document.createElement('button');
+    cancelButton.className = "playOverlayHidden";
+    cancelButton.innerText = "Cancel";
+    cancelButton.addEventListener("click", function(){ playOverlay.remove(); });
+    playOverlay.appendChild(cancelButton);
+
+    document.body.appendChild(playOverlay);
+
+    // Transition to the play overlay. Must be delayed for playOverlay to be drawn on screen or animations won't trigger.
+    setTimeout(function() {
+        // Apply the CSS class to trigger the transition position from menu item to play overlay
+        playOverlay.classList.add("playOverlay");
+
+        // Set background transparency to make play options more visible
+        playOverlay.style.backgroundImage = "linear-gradient(rgba(255,255,255,0.5), rgba(255,255,255,0.5)), " + playOverlay.style.backgroundImage;
+
+        // Make play options visible
+        setTimeout(function() {
+            difficultyLabel.classList.add("playOverlayVisible");
+            difficultyLabel.classList.remove("playOverlayHidden");
+            orientationLabel.classList.add("playOverlayVisible");
+            orientationLabel.classList.remove("playOverlayHidden");
+            orientationSpan.classList.add("playOverlayVisible");
+            orientationSpan.classList.remove("playOverlayHidden");
+            playButton.classList.add("playOverlayVisible");
+            playButton.classList.remove("playOverlayHidden");
+            cancelButton.classList.add("playOverlayVisible");
+            cancelButton.classList.remove("playOverlayHidden");
+        }, 500);
+    }, 50);
 }
 
 function createPuzzle() {
-    // Hide the main menu page
-    displayPage("page1", false);
 
     var fileOpener = document.getElementById("fileOpener");
     
@@ -353,11 +477,9 @@ function createPuzzle() {
             // Instanciate the image cropper tool
             setTimeout(cropImage, 300);
  
-            // Show the create puzzle page
-            displayPage("page2", true);
-        } else {
-            // No image was chosen, open the main menu page
-            displayPage("page1", true);
+            // Transition to the create puzzle page
+            displayPage("page1", false);
+            setTimeout(function(){displayPage("page2", true);}, 600);
         }
     });
 
@@ -368,6 +490,7 @@ function createPuzzle() {
 function cropImage() {
     CROPPER = new Croppr('#createPuzzlePreview', {
         minSize: { width: 175, height: 175 },
+        aspectRatio: [3,2]
     });
     
     // Due to a bug somewhere in the Croppr lib, a reset after rendering is required to catch the correct sizing of the parent container
@@ -445,7 +568,8 @@ async function makePuzzle() {
 
     // Save the new puzzle
     var title = createPuzzleName.value.trim();
-    addPuzzle(ACTIVE_FID, pid, title);
+    var aspectRatio = determineAspectRatio(cropSize);
+    savePuzzleFromAttrs(ACTIVE_FID, pid, title, aspectRatio);
 
     // Reload the puzzles to include the new entry
     await loadMainMenu();
@@ -453,6 +577,81 @@ async function makePuzzle() {
     // Transition to the main menu
     displayPage("page2", false);
     setTimeout(function(){displayPage("page1", true)}, 600);
+}
+
+// Finds the greatest common denominator of 2 passed integers
+// @param a - integer
+// @param b - integer
+function findGCD(a, b) {
+    if ( b === 0 ) {
+        return a;
+    }
+    return findGCD(b, a % b);
+}
+
+function determineAspectRatio(dimensions) {
+    // Determine aspect ratio, in fraction
+    let gcd = findGCD(dimensions.width, dimensions.height);
+    let x = dimensions.width / gcd;
+    let y = dimensions.height / gcd;
+    return [x,y];
+}
+
+function getDifficulties(aspectRatio) {
+    let difficulties = {};
+
+    const x = aspectRatio[0];
+    const y = aspectRatio[1];
+
+    // Support for these aspect ratios: 1:1, 3:2, 2:3, 4:3, 3:4
+    if (x == 1 && y == 1) {
+        difficulties[64] = "8x8";
+        difficulties[100] = "10x10";
+        difficulties[144] = "12x12";
+        difficulties[256] = "16x16";
+        difficulties[400] = "20x20";
+        difficulties[576] = "24x24";
+        difficulties[784] = "28x28";
+        difficulties[1024] = "32x32";
+    } else if (x == 3 && y == 2) {
+        difficulties[54] = "9x6";
+        difficulties[96] = "12x8";
+        difficulties[150] = "15x10";
+        difficulties[216] = "18x12";
+        difficulties[294] = "21x14";
+        difficulties[486] = "27x18";
+        difficulties[726] = "33x22";
+        difficulties[1014] = "39x26";
+    } else if (x == 2 && y == 3) {
+        difficulties[54] = "6x9";
+        difficulties[96] = "8x12";
+        difficulties[150] = "10x15";
+        difficulties[216] = "12x18";
+        difficulties[294] = "14x21";
+        difficulties[486] = "18x27";
+        difficulties[726] = "22x33";
+        difficulties[1014] = "26x39";
+    } else if (x == 4 && y == 3) {
+        difficulties[48] = "8x6";
+        difficulties[108] = "12x9";
+        difficulties[192] = "16x12";
+        difficulties[300] = "20x15";
+        difficulties[432] = "24x18";
+        difficulties[588] = "28x21";
+        difficulties[768] = "32x24";
+        difficulties[972] = "36x27";
+    } else if (x == 3 && y == 4) {
+        difficulties[48] = "6x8";
+        difficulties[108] = "9x12";
+        difficulties[192] = "12x16";
+        difficulties[300] = "15x20";
+        difficulties[432] = "18x24";
+        difficulties[588] = "21x28";
+        difficulties[768] = "24x32";
+        difficulties[972] = "27x36";
+    }
+
+    return difficulties;
 }
 
 // @param canvas - HTML5 canvas
