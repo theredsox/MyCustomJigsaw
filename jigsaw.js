@@ -1,6 +1,7 @@
 // Priority TODOs
 //
 // * In start game overlay, change the two dropdowns to better UI elements. Dropdowns aren't easy for mobile devices.
+// *    Consider using a solid background color for the overlay instead of the puzzle image
 // * Allow selection of ratio on 'create a puzzle' menu. Right now hardcoded to 3:2 for CROPPER.
 // * Add background "covers" to avoid  users interacting with background items when on an overlay (create puzzle, create folder, play menu)
 // * Create the game board and initialize the pieces
