@@ -8,6 +8,11 @@ input[type="checkbox"] {
     vertical-align: middle;
 }
 
+ul {
+    margin: 8px 0px;
+    padding-inline-start: 20px;
+}
+
 .title {
     color: black;
     font-size: 24px;
@@ -31,8 +36,23 @@ input[type="checkbox"] {
     width: 100%;
 }
 
-.hidden {
+.overlayCover {
+    background-color: black;
+    height: 100%;
+    left: 0px;
+    position: absolute;
+    opacity: .6;
+    top: 0px;
+    width: 100%;
+    z-index: 50;
+}
+
+.remove {
     display: none;
+}
+
+.add {
+    display: inline;
 }
 
 .mainMenu {
@@ -54,7 +74,7 @@ input[type="checkbox"] {
     width: 100%;
 }
 
-.menuOptions > button, .createPuzzle > button, .createFolderOverlay > button, .playOverlay > button {
+.menuOptions > button, .createPuzzle > button, .createFolderOverlay > button, .playOverlay > button, .infoOverlay > button {
     background-color: #007eec;
     border: 1px solid #0460b1;
     border-radius: 4px;
@@ -63,7 +83,7 @@ input[type="checkbox"] {
     color: #fff;
     cursor: pointer;
     font-size: 14px;
-    font-weight: 400;
+    font-weight: bold;
     outline: 0px;
     padding: 5px;
     text-align: center;
@@ -77,6 +97,7 @@ input[type="checkbox"] {
 .createPuzzle > button:hover:not([disabled]), 
 .createFolderOverlay > button:hover:not([disabled]),
 .playOverlay > button:hover:not([disabled]),
+.infoOverlay > button:hover:not([disabled]),
 .diskSpace:hover:not([disabled]),
 .import:hover:not([disabled]),
 .export:hover:not([disabled]) {
@@ -84,7 +105,11 @@ input[type="checkbox"] {
   transform: translateY(-1px);
 }
 
-.menuOptions > button:disabled, .createPuzzle > button:disabled, .createFolderOverlay > button:disabled, .playOverlay > button:disabled {
+.menuOptions > button:disabled, 
+.createPuzzle > button:disabled, 
+.createFolderOverlay > button:disabled, 
+.playOverlay > button:disabled,
+.infoOverlay > button:disabled {
   border: 1px solid #999999;
   background-color: #cccccc;
   color: #666666;
@@ -131,6 +156,7 @@ input[type="checkbox"] {
 
 .menuItemTitle {
     color: white;
+    font-weight: bold;
     left: 0px;
     line-height: 20px;
     margin: 5px;
@@ -234,7 +260,7 @@ input[type="checkbox"] {
     color: black;
     display: none;
     font-size: 12px;
-    font-weight: 400;
+    font-weight: bold;
     padding-left: 3px;
     vertical-align: middle;
 }
@@ -287,6 +313,7 @@ input[type="checkbox"] {
     width: 300px;
     top: 50%;
     transform: translate(-50%, -50%);
+    z-index: 100;
 }
 
 .createFolderOverlayHeader {
@@ -344,17 +371,23 @@ input[type="checkbox"] {
 }
 
 .playOverlay {
-    left: 50% !important;
-    margin: -175px 0 0 -175px;
-    top: 50% !important;
-    transition: height 1s, left 1s, margin 1s, top 1s, width 1s;
-    width: 350px;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border: 1px solid #0460b1;
+    height: 175px;
+    width: 175px;
+    z-index: 100;
 }
 
-.playOverlay:hover {
-    box-shadow: none;
-    cursor: auto;
-    transform: none;
+.playOverlayTransition {
+    height: 400px;
+    left: 50% !important;
+    
+    transform: translate(-50%, -50%);
+    top: 50% !important;
+    transition: height 1s, left 1s, margin 1s, top 1s, width 1s, transform 1s;
+    width: 370px;
 }
 
 .playOverlayHidden {
@@ -371,13 +404,192 @@ input[type="checkbox"] {
 
 .playOverlayLabel {
     display: block;
-    margin: 5px;
+    margin: 5px 5px 0px 5px;
 }
 
 .playOverlayOrientationSpan {
     font-size: 14px;
+    margin-left: 5px;
 }
 
 .playOverlayButton {
     margin: 5px;
+}
+
+.playOverlayDifficulties {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(177px, max-content));
+    justify-content: center;
+    gap: 5px 6px;
+    margin: 5px;
+    text-align: center;
+}
+
+.playOverlayDifficulty {
+    background-color: #007eec;
+    height: 60px;
+    list-style-type: none;
+    position: relative;
+    user-select: none;
+}
+
+.playOverlayDifficultySelected {
+    cursor: pointer;
+    box-shadow: 0 0 2px 3px #003360 !important;
+    transform: translateY(-2px);
+}
+
+.playOverlayDifficulty:hover {
+    cursor: pointer;
+    box-shadow: 0 0 5px 3px #0066bf;
+    transform: translateY(-2px);
+}
+
+.difficultySpan {
+    align-content: center;
+    color: white;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 35px;
+    justify-content: center;
+}
+
+.difficultyHeader {
+    height: 25px;
+    left: 0px;
+    top: 0px;
+}
+
+.difficulty0 {
+    background-color: #5F9C3F;
+    
+}
+.difficulty1 {
+    background-color: #5F9C3F;
+    
+}
+.difficulty2 {
+    background-color: #107896;
+    
+}
+.difficulty3 {
+    background-color: #107896;
+    
+}
+.difficulty4 {
+    background-color: #C16512;
+    
+}
+.difficulty5 {
+    background-color: #C16512;
+    
+}
+.difficulty6 {
+    background-color: #C02F1D;
+    
+}
+.difficulty7 {
+    background-color: #C02F1D;
+    
+}
+
+.difficultyTitle {
+    color: white;
+    font-weight: bold;
+    left: 0px;
+    line-height: 25px;
+    opacity: 1;
+    overflow: hidden;
+    position: absolute;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+    top: 0px;
+    width: 175px;
+}
+
+.playOverlayOrientation {
+    background-color: #007eec;
+    height: 66px;
+    list-style-type: none;
+    margin: 0px 5px;
+    position: relative;
+}
+
+.orientationHeader {
+    background-color: black;
+    height: 25px;
+    left: 0px;
+    opacity: .5;
+    top: 0px;
+}
+
+.orientationTitle {
+    color: white;
+    font-weight: bold;
+    left: 0px;
+    line-height: 25px;
+    margin-left: 5px;
+    opacity: 1;
+    overflow: hidden;
+    position: absolute;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+    top: 0px;
+    width: calc(100% - 5px);
+}
+
+.orientationTitleInfoImg {
+    position: absolute;
+    margin-left: 5px;
+    height: 25px;
+    width: 25px;
+}
+
+.orientationSelect {
+    background-color: #5F9C3F;
+    font-weight: bold;
+    height: 30px;
+    margin: 5px 0px 5px 5px;
+}
+
+.orientationOption0 { 
+    background-color: #5F9C3F;
+    font-weight: bold;
+}
+.orientationOption1 { 
+    background-color: #C16512;
+    font-weight: bold;
+}
+.orientationOption2 { 
+    background-color: #C02F1D;
+    font-weight: bold;
+}
+
+.orientationTitleInfoSpan {
+    color: black;
+    display: none;
+    font-size: 12px;
+    font-weight: bold;
+    padding-left: 3px;
+    vertical-align: middle;
+}
+
+.infoOverlay {
+    background-color: #5eb4ff;
+    border: 1px solid #0460b1;
+    left: 50%;
+    padding: 10px;
+    position: fixed;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 380px;
+    z-index: 200;
+}
+
+.infoOverlayClose {
+    display: block;
+    margin: 5px 5px 0px 0px;
 }

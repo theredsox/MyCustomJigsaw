@@ -42,15 +42,20 @@
         </div>
     </div>
     <input id="fileOpener" type="file" accept="image/png, image/gif, image/jpeg, image/webp" style="display: none" />
-    <div id="diskSpace" class="diskSpace" onclick="toggleDiskSpaceText()" title="Disk usage">
+    <div id="diskSpace" class="diskSpace" onclick="toggleDiskSpaceText()" title="Click for disk usage">
         <img src="assets/diskspace.png" />
         <span id="diskSpaceText" class="diskSpaceText"></span>
     </div>
-    <div id="export" class="export" onclick="exportPuzzles()" title="Export all puzzles">
+    <div id="export" class="export" onclick="exportPuzzles()" title="Click to export all puzzles">
         <img src="assets/export.png" />
     </div>
-    <div id="import" class="import" onclick="importPuzzles()" title="Import puzzles from a .zip export file">
+    <div id="import" class="import" onclick="importPuzzles()" title="click to import puzzles from a .zip export file">
         <img src="assets/import.png" />
+    </div>
+    <div id="overlayCover" class="overlayCover remove"></div>
+    <div id="infoOverlay" class="infoOverlay remove">
+        <span id="infoOverlayText"></span>
+        <button class="infoOverlayClose" onclick="closeInfoOverlay()">Close</button>
     </div>
 </body>
 
