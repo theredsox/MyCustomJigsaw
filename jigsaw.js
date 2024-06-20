@@ -1,8 +1,13 @@
 // Priority TODOs
-//
+// * BUG: Aspect ratio bug when creating a puzzle. 4000/y = 3/2 => 4000/1.5 = y => 2,666.666666666667. cropper chose 2669 for y.
+//        When we save the images, we'll have to adjust for this manually. Maybe slightly adjust the crop programatically.
+//        Otherwise set the aspect ratio in the metadata using the aspect ratio input chooser in the TODO below. Then deal with the
+//        descrepency down the line when the puzzle is being cut into pieces. It would likely mean one column or row could be slightly
+//        rectangular. Probably not even noticable, though saving perfect aspect ratio images would be preferred probably.
 // * Allow selection of ratio on 'create a puzzle' menu. Right now hardcoded to 3:2 for CROPPER.
 // * Change "page2", create puzzle, to the "overlay" format. No animation transition and use overlayCover. Page2 becomes board instead of page3
 // *    Consider how these overlays can be written more in HTML instead of JS. (create puzzle, create folder, play options)
+// * UI: Override focus CSS from play options > piece orientation SELECT that occurs after selection an OPTION
 // * Create the game board and initialize the pieces
 // * Initial play functionality (snap pieces, rotate pieces, puzzle image for reference, zoom, buckets, sound on/off)
 // * Controls: left click+drag = move, right click = zoom on piece, left click+alt = rotate, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select pieces in area
@@ -551,9 +556,6 @@ function createPuzzle() {
             // Default title to file name
             var createPuzzleName = document.getElementById("createPuzzleName");
             createPuzzleName.value = formatTitle(fileOpener.files[0].name);
-            setTimeout(function() { 
-                createPuzzleName.focus();
-            }, 50);
 
             // Populate the image preview
             var createPuzzlePreview = document.getElementById("createPuzzlePreview");
@@ -566,7 +568,12 @@ function createPuzzle() {
  
             // Transition to the create puzzle page
             displayPage("page1", false);
-            setTimeout(function(){displayPage("page2", true);}, 600);
+            setTimeout(function(){
+                displayPage("page2", true);
+                setTimeout(function() { 
+                    createPuzzleName.focus();
+                }, 600);
+            }, 600);
         }
     });
 
