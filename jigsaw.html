@@ -15,6 +15,7 @@
 <body onload="loadMainMenu()">
     <img class="title" src="assets/logo-my-custom-puzzles-2560x512.png" />
     <div class="body">
+        <!-- Main Menu for creating puzzles, organizing, managing data -->
         <div id="page1" class="page visible">
             <div id="mainMenu" class="mainMenu">
                 <div class="menuOptions">
@@ -25,23 +26,12 @@
                 </div>
             </div>
         </div>
-        <div id="page2" class="page hidden">
-            <div class="createPuzzle">
-                <div class="createPuzzleHeader"></div>
-                <span class="createPuzzleTitle">Create a new puzzle</span>
-                <label class="createPuzzleInput" for="createPuzzleName">
-                    Title 
-                    <input id="createPuzzleName" class="createPuzzleName" type="text" maxlength="20" onfocus="this.setSelectionRange(0, this.value.length)"/>
-                </label>
-                <div class="createPuzzleInput">
-                    <img id="createPuzzlePreview" class="createPuzzlePreview" src="#" alt="Chosen image" />
-                </div>
-                <button class="createPuzzleButton" onclick="makePuzzle()">Save Puzzle</button>
-                <button onclick="cancelPuzzle()">Cancel</button>
-            </div>
-        </div>
+        <!-- Play Board for solving puzzles -->
+        <div id="page2" class="page hidden">Implement play board</div>
     </div>
+    <!-- Hidden input for user to upload puzzle images -->
     <input id="fileOpener" type="file" accept="image/png, image/gif, image/jpeg, image/webp" style="display: none" />
+    <!-- Data management; viewing usage, importing and exporting all user generated data -->
     <div id="diskSpace" class="diskSpace" onclick="toggleDiskSpaceText()" title="Click for disk usage">
         <img src="assets/diskspace.png" />
         <span id="diskSpaceText" class="diskSpaceText"></span>
@@ -52,10 +42,74 @@
     <div id="import" class="import" onclick="importPuzzles()" title="click to import puzzles from a .zip export file">
         <img src="assets/import.png" />
     </div>
+    <!-- Cover that prevents interacting with UI elements that are behind an active overlay -->
     <div id="overlayCover" class="overlayCover remove"></div>
+    <!-- A reusable overlay for providing users additional information about a UI element -->
     <div id="infoOverlay" class="infoOverlay remove">
         <span id="infoOverlayText"></span>
         <button class="infoOverlayClose" onclick="closeInfoOverlay()">Close</button>
+    </div>
+    <!-- Overlay for creating a new puzzle -->
+    <div id="createPuzzleOverlay" class="createPuzzleOverlay remove">
+        <div class="createPuzzleHeader"></div>
+        <span id="createPuzzleTitle" class="createPuzzleTitle">Name your new puzzle</span>
+        <label id="createPuzzleNameLabel" class="formInput">
+            Name <input id="createPuzzleName" class="createPuzzleName" type="text" maxlength="20" onkeyup="checkButtonStatus('createPuzzleNextButton', this, event)" onfocus="this.setSelectionRange(0, this.value.length)">
+        </label>
+        <label id="createPuzzleAspectRatioWrapper" class="formInput remove" for="createPuzzleAspectRatio">
+            Scale
+            <select id="createPuzzleAspectRatio" class="createPuzzleAspectRatio" onchange="changeAspectRatio(this.value)">
+                <option value="1:1">Square</option>
+                <option value="4:3">Landscape</option>
+                <option value="3:2">Wider Landscape</option>
+                <option value="3:4">Portrait</option>
+                <option value="2:3">Taller Portrait</option>
+            </select>
+        </label>
+        <div id="createPuzzlePreviewWrapper" class="formInput">
+            <img id="createPuzzlePreview" class="createPuzzleThumbnail" src="#" alt="Chosen image" />
+        </div>
+        <button id="createPuzzleNextButton" onclick="createPuzzleStep2()">Next Step</button>
+        <button id="createPuzzleSaveButton" class="remove" onclick="makePuzzle()">Save Puzzle</button>
+        <button onclick="closePuzzleOverlay()">Cancel</button>
+    </div>
+    <!-- Overlay for creating a new folder used in organizing puzzles -->
+    <div id="createFolderOverlay" class="createFolderOverlay remove">
+        <div class="createFolderHeader"></div>
+        <span class="createFolderTitle">Create a new folder</span>
+        <label class="formInput">
+            Name <input id="createFolderName" class="createFolderName" type="text" maxlength="20" onkeyup="checkButtonStatus('createFolderSaveButton', this, event)">
+        </label>
+        <button id="createFolderSaveButton" onclick="makeFolder()" disabled=true>Save Folder</button>
+        <button onclick="closeFolderOverlay()">Cancel</button>
+    </div>
+    <!-- Hidden HTML template objects which store their static attributes -->
+    <div id="cloneHTMLtemplates" class="remove">
+        <div id="menuItemClone" class="menuItem" onclick="menuItemClick(this, event)">
+            <div class="menuItemHeader">
+                <input class="menuItemDelete" type="checkbox">
+            </div>
+            <span class="menuItemTitle"></span>
+        </div>
+        <div id="playOverlayDifficultyClone" class="playOverlayDifficulty" onclick="playOverlayDifficultyClick(this)">
+            <div class="difficultyHeader"></div>
+            <span class="difficultyTitle"></span>
+            <span class="difficultySpan"></span>
+        </div>
+        <div id="playOverlayOrientationClone" class="playOverlayOrientation playOverlayHidden hidden">
+            <div class="orientationHeader"></div>
+            <span class="orientationTitle">
+                Piece Orientation<img class="orientationTitleInfoImg" src="assets/info-white.png" title="Click for detailed info on piece orientation options" onclick="playOverlayOrientationInfoClick()">
+            </span>
+            <select class="orientationSelect" onchange="playOverlayOrientationSelectChange(this)">
+                <option class="orientationOption0" value="0">Standard - No rotation</option>
+                <option class="orientationOption1" value="1">Intermediate (2x) - North, South</option>
+                <option class="orientationOption2" value="2">Advanced (4x) - Cardinal</option>
+            </select>
+            <span class="playOverlayOrientationSpan playOverlayHidden">  * [Alt] key to rotate</span>
+        </div>
+        <button id="playButtonClone" class="playOverlayButton playOverlayHidden hidden" disabled=true onclick="playOverlayPlayButtonClick(this)">Play now</button>
+        <button id="cancelButtonClone" class="playOverlayHidden hidden" onclick="playOverlayCancelButtonClick(this)">Cancel</button>
     </div>
 </body>
 

@@ -8,6 +8,10 @@ input[type="checkbox"] {
     vertical-align: middle;
 }
 
+select:focus {
+    outline: none;
+}
+
 ul {
     margin: 8px 0px;
     padding-inline-start: 20px;
@@ -48,11 +52,12 @@ ul {
 }
 
 .remove {
-    display: none;
+    display: none !important;
 }
 
-.add {
-    display: inline;
+.formInput {
+    display: block;
+    margin: 5px;
 }
 
 .mainMenu {
@@ -74,7 +79,11 @@ ul {
     width: 100%;
 }
 
-.menuOptions > button, .createPuzzle > button, .createFolderOverlay > button, .playOverlay > button, .infoOverlay > button {
+.menuOptions > button, 
+.createPuzzleOverlay > button, 
+.createFolderOverlay > button, 
+.playOverlay > button, 
+.infoOverlay > button {
     background-color: #007eec;
     border: 1px solid #0460b1;
     border-radius: 4px;
@@ -93,8 +102,13 @@ ul {
     -webkit-user-select: none;
 }
 
+.createPuzzleOverlay > button,
+.createFolderOverlay > button {
+    margin: 0px 0px 5px 5px;
+}
+
 .menuOptions > button:hover:not([disabled]), 
-.createPuzzle > button:hover:not([disabled]), 
+.createPuzzleOverlay > button:hover:not([disabled]), 
 .createFolderOverlay > button:hover:not([disabled]),
 .playOverlay > button:hover:not([disabled]),
 .infoOverlay > button:hover:not([disabled]),
@@ -106,7 +120,7 @@ ul {
 }
 
 .menuOptions > button:disabled, 
-.createPuzzle > button:disabled, 
+.createPuzzleOverlay > button:disabled, 
 .createFolderOverlay > button:disabled, 
 .playOverlay > button:disabled,
 .infoOverlay > button:disabled {
@@ -179,54 +193,6 @@ ul {
     visibility: visible;
     opacity: 1;
     transition: opacity .5s linear;
-}
-
-.createPuzzle {
-    background-color: #47a9ff;
-    border: 1px solid #0460b1;
-    margin: auto;
-    max-height: calc(100vh - 100px);
-    max-width: calc(100vw - 20px);
-    position: relative;
-}
-
-.createPuzzleHeader {
-    background-color: black;
-    height: 30px;
-    left: 0px;
-    opacity: .5;
-    top: 0px;
-}
-
-.createPuzzleTitle {
-    color: white;
-    left: 0px;
-    line-height: 20px;
-    margin: 5px;
-    opacity: 1;
-    overflow: hidden;
-    position: absolute;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-    top: 0px;
-    width: 370px;
-}
-
-.createPuzzleInput {
-    display: block;
-    margin: 5px;
-}
-
-.createPuzzlePreview {
-    height: auto;
-    object-fit: contain;
-    max-height: calc(100vh - 215px);
-    max-width: calc(100vw - 50px);
-    width: auto;
-}
-
-.createPuzzleButton {
-    margin: 0px 0px 5px 5px;
 }
 
 .diskSpace {
@@ -305,7 +271,7 @@ ul {
     -webkit-user-select: none;
 }
 
-.createFolderOverlay {
+.createPuzzleOverlay, .createFolderOverlay {
     position: absolute;
     background-color: #4babff;
     border: 2px solid #0460b1;
@@ -316,7 +282,7 @@ ul {
     z-index: 100;
 }
 
-.createFolderOverlayHeader {
+.createPuzzleHeader, .createFolderHeader {
     background-color: black;
     height: 30px;
     left: 0px;
@@ -324,7 +290,7 @@ ul {
     top: 0px;
 }
 
-.createFolderOverlayTitle {
+.createPuzzleTitle, .createFolderTitle {
     color: white;
     left: 0px;
     line-height: 20px;
@@ -338,26 +304,46 @@ ul {
     width: 165px;
 }
 
-.createFolderOverlayInput {
-    display: block;
-    margin: 5px;
-}
-
-.createFolderOverlayButton {
-    margin: 5px;
-}
-
 .createPuzzleName, .createFolderName {
     border-radius: 3px;
     border: 1px solid #0066bf;
     background-color: #fdfdfd00;
     height: 20px;
-    margin: 0px 0px 10px 5px;
     outline: white;
 }
 
 .createPuzzleName:focus, .createFolderName:focus {
     box-shadow: rgba(0, 102, 191, .9) 0px 3px 9px 0px;
+}
+
+.createPuzzleAspectRatio {
+    background-color: #7ac1ff;
+    font-weight: bold;
+    height: 30px;
+}
+
+.createPuzzleThumbnail {
+    height: auto;
+    max-height: 290px;
+    max-width: 290px;
+    object-fit: contain;
+    width: auto;
+}
+
+.createPuzzlePreview {
+    height: auto;
+    max-height: calc(100vh - 170px);
+    max-width: calc(100vw - 20px);
+    object-fit: contain;
+    width: auto;
+}
+
+.createPuzzleOverlayTransition {
+    height: calc(100vh - 55px);
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100vw - 16px);
 }
 
 .dragging {

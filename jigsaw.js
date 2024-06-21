@@ -1,13 +1,4 @@
 // Priority TODOs
-// * BUG: Aspect ratio bug when creating a puzzle. 4000/y = 3/2 => 4000/1.5 = y => 2,666.666666666667. cropper chose 2669 for y.
-//        When we save the images, we'll have to adjust for this manually. Maybe slightly adjust the crop programatically.
-//        Otherwise set the aspect ratio in the metadata using the aspect ratio input chooser in the TODO below. Then deal with the
-//        descrepency down the line when the puzzle is being cut into pieces. It would likely mean one column or row could be slightly
-//        rectangular. Probably not even noticable, though saving perfect aspect ratio images would be preferred probably.
-// * Allow selection of ratio on 'create a puzzle' menu. Right now hardcoded to 3:2 for CROPPER.
-// * Change "page2", create puzzle, to the "overlay" format. No animation transition and use overlayCover. Page2 becomes board instead of page3
-// *    Consider how these overlays can be written more in HTML instead of JS. (create puzzle, create folder, play options)
-// * UI: Override focus CSS from play options > piece orientation SELECT that occurs after selection an OPTION
 // * Create the game board and initialize the pieces
 // * Initial play functionality (snap pieces, rotate pieces, puzzle image for reference, zoom, buckets, sound on/off)
 // * Controls: left click+drag = move, right click = zoom on piece, left click+alt = rotate, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select pieces in area
@@ -41,13 +32,6 @@ const DIFFICULTIES = [
     "Up all night", 
     "Eat, sleep, jigsaw, repeat"
 ];
-
-// Tracks the piece orientation labels
-const ORIENTATIONS = [
-    "Standard - No rotation",
-    "Intermediate (2x) - North, South", 
-    "Advanced (4x) - Cardinal"
-]
 
 window.onresize = function() {
     if (CROPPER) {
@@ -96,104 +80,98 @@ function sortPuzzles([aK,aV],[bK,bV]) {
     return aV.localeCompare(bV);
 }
 
+function menuItemClick(menuItem, event){
+    // If in delete mode, toggle checked and disable dragging
+    let checkbox = menuItem.querySelector(".menuItemDelete");
+    if (checkbox.checkVisibility()) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.checked ? menuItem.classList.add("menuItemChecked") : menuItem.classList.remove("menuItemChecked");
+
+        // Update delete button text
+        let deleteButton = document.getElementById("deleteButton");
+        const count = document.querySelectorAll(".menuItemChecked").length;
+        deleteButton.innerText = "Delete (" + count + ")";
+        return;
+    }
+    if (menuItem.id.startsWith("f")) {
+        ACTIVE_FID = menuItem.id;
+        loadMainMenu();
+    } else {
+        loadPlayOverlay(menuItem, event);
+    }
+}
+
+function menuItemDropTarget(menuItem) {
+    menuItem.addEventListener("dragover", function(event){ 
+        event.preventDefault();
+        menuItem.classList.add("dropTargetHighlight");
+    });
+    menuItem.addEventListener("dragleave", function(){ 
+        menuItem.classList.remove("dropTargetHighlight");
+    });
+    menuItem.addEventListener("drop", function(event){ 
+        event.preventDefault();
+        var pid = event.dataTransfer.getData("text");
+        movePuzzle(ACTIVE_FID, event.target.id, pid);
+        document.getElementById(pid).remove();
+        menuItem.classList.remove("dropTargetHighlight");
+    });
+}
+
+function menuItemDragTarget(menuItem) {
+    menuItem.addEventListener("dragstart", function(event){
+        event.dataTransfer.setData("text", event.target.id);
+        this.classList.add("dragging");
+
+        if (ACTIVE_FID != "root") {
+            // Turn the folder button into a drop point for moving a puzzle home
+            let createFolderButton = document.getElementById("createFolderButton");
+            createFolderButton.innerText = "Move Puzzle to Home";
+            createFolderButton.ondragover = function(event){ 
+                event.preventDefault();
+                createFolderButton.classList.add("dropTargetHighlight");
+            };
+            createFolderButton.ondragleave = function(event){ 
+                createFolderButton.classList.remove("dropTargetHighlight");
+            }
+            createFolderButton.ondrop = function(event){ 
+                event.preventDefault();
+                var pid = event.dataTransfer.getData("text");
+                movePuzzle(ACTIVE_FID, "root", pid);
+                document.getElementById(pid).remove();
+                createFolderButton.classList.remove("dropTargetHighlight");
+            };
+        }
+    });
+    menuItem.addEventListener("dragend", function(){ 
+        this.classList.remove("dragging");
+
+        if (ACTIVE_FID != "root") {
+            // Turn the folder button back into return home
+            let createFolderButton = document.getElementById("createFolderButton");
+            createFolderButton.innerText = "Return Home";
+            createFolderButton.ondragover = null;
+            createFolderButton.ondragleave = null;
+            createFolderButton.ondrop = null;
+        }
+    });
+}
+
 async function loadMenuItem(id, title) {
     var isFolder = id.startsWith("f");
 
-    // Create menu item container
-    var menuItem = window.document.createElement('div');
-    menuItem.className = "menuItem";
+    // Create menu item container from the clone template
+    var menuItem = window.document.getElementById("menuItemClone").cloneNode(true);
     menuItem.draggable = !isFolder;
     menuItem.id = id;
-    menuItem.addEventListener("click", function(event){
-        // If in delete mode, toggle checked and disable dragging
-        let checkbox = this.querySelector(".menuItemDelete");
-        if (checkbox.checkVisibility()) {
-            checkbox.checked = !checkbox.checked;
-            checkbox.checked ? this.classList.add("menuItemChecked") : this.classList.remove("menuItemChecked");
-
-            // Update delete button text
-            let deleteButton = document.getElementById("deleteButton");
-            const count = document.querySelectorAll(".menuItemChecked").length;
-            deleteButton.innerText = "Delete (" + count + ")";
-            return;
-        }
-        if (isFolder) {
-            ACTIVE_FID = id;
-            loadMainMenu();
-        } else {
-            loadPlayOverlay(this, id, event);
-        }
-    });
+    
     if (isFolder) {
-        menuItem.addEventListener("dragover", function(event){ 
-            event.preventDefault();
-            menuItem.classList.add("dropTargetHighlight");
-        });
-        menuItem.addEventListener("dragleave", function(event){ 
-            menuItem.classList.remove("dropTargetHighlight");
-        });
-        menuItem.addEventListener("drop", function(event){ 
-            event.preventDefault();
-            var pid = event.dataTransfer.getData("text");
-            movePuzzle(ACTIVE_FID, event.target.id, pid);
-            document.getElementById(pid).remove();
-            menuItem.classList.remove("dropTargetHighlight");
-        });
+        menuItemDropTarget(menuItem);
     } else {
-        menuItem.addEventListener("dragstart", function(event){
-            event.dataTransfer.setData("text", event.target.id);
-            this.classList.add("dragging");
-
-            if (ACTIVE_FID != "root") {
-                // Turn the folder button into a drop point for moving a puzzle home
-                let createFolderButton = document.getElementById("createFolderButton");
-                createFolderButton.innerText = "Move Puzzle to Home";
-                createFolderButton.ondragover = function(event){ 
-                    event.preventDefault();
-                    createFolderButton.classList.add("dropTargetHighlight");
-                };
-                createFolderButton.ondragleave = function(event){ 
-                    createFolderButton.classList.remove("dropTargetHighlight");
-                }
-                createFolderButton.ondrop = function(event){ 
-                    event.preventDefault();
-                    var pid = event.dataTransfer.getData("text");
-                    movePuzzle(ACTIVE_FID, "root", pid);
-                    document.getElementById(pid).remove();
-                    createFolderButton.classList.remove("dropTargetHighlight");
-                };
-            }
-        });
-        menuItem.addEventListener("dragend", function(event){ 
-            this.classList.remove("dragging");
-
-            if (ACTIVE_FID != "root") {
-                // Turn the folder button back into return home
-                let createFolderButton = document.getElementById("createFolderButton");
-                createFolderButton.innerText = "Return Home";
-                createFolderButton.ondragover = null;
-                createFolderButton.ondragleave = null;
-                createFolderButton.ondrop = null;
-            }
-        });
+        menuItemDragTarget(menuItem);
     }
 
-    // Create menu item header
-    var itemHeaderDiv = window.document.createElement('div');
-    itemHeaderDiv.className = "menuItemHeader";
-    menuItem.appendChild(itemHeaderDiv);
-    
-    // Create menu item delete checkbox
-    var itemDeleteInput = window.document.createElement('input');
-    itemDeleteInput.className = "menuItemDelete";
-    itemDeleteInput.type = "checkbox";
-    itemHeaderDiv.appendChild(itemDeleteInput);
-
-    // Create menu item title
-    var itemTitleSpan = window.document.createElement('span');
-    itemTitleSpan.className = "menuItemTitle";
-    itemTitleSpan.textContent = title;
-    menuItem.appendChild(itemTitleSpan);
+    menuItem.querySelector(".menuItemTitle").textContent = title;
 
     // If the item is a folder, show the folder image. Otherwise show the custom puzzle portrait
     if (isFolder) {
@@ -209,83 +187,45 @@ async function loadMenuItem(id, title) {
     mainMenu.appendChild(menuItem);
 }
 
+function checkButtonStatus(buttonId, textField, event) {
+    // Disable passed button when no name is provided
+    var button = document.getElementById(buttonId);
+    button.disabled = textField.value.trim().length == 0;
+
+    // Auto submit on enter key
+    if (event.key === 'Enter') {
+        button.click();
+    }
+}
+
+function makeFolder() {
+    let fid = getAndIncrementNextFolderID();
+    var name = document.getElementById("createFolderName").value.trim();
+    addFolder(fid, name);
+
+    // TODO: Consider manually inserting the new DOM folder instead of reloading them all.
+    // Need to determine where to insert it for alpha order of folders
+    loadMainMenu();
+
+    closeFolderOverlay();
+}
+
+function closeFolderOverlay() {
+    // Hide overlays
+    document.getElementById("createFolderOverlay").classList.add("remove");
+    hideOverlayCover();
+
+    // Reset name component
+    document.getElementById("createFolderName").value = "";
+}
+
 function createFolder() {
-    // Create overlay to capture folder name
-    var overlayDiv = window.document.createElement('div');
-    overlayDiv.className = "createFolderOverlay";
-
-    // Create the header
-    var header = window.document.createElement('div');
-    header.className = "createFolderOverlayHeader";
-    overlayDiv.appendChild(header);
-    
-    // Create the title
-    var title = window.document.createElement('span');
-    title.className = "createFolderOverlayTitle";
-    title.innerText = "Create a new folder";
-    overlayDiv.appendChild(title);
-
-    // Create the text input label to capture the folder name
-    var label = window.document.createElement('label');
-    label.className = "createFolderOverlayInput";
-    label.innerText = "Name ";
-    overlayDiv.appendChild(label);
-
-    // Create text input to capture folder name
-    var input = window.document.createElement('input');
-    input.id = "createFolderName";
-    input.className = "createFolderName";
-    input.type = "text";
-    input.maxLength = 20;
-    input.addEventListener("keyup", function(event){ 
-        // Disable create button when no name is provided
-        var createButton = document.getElementById("createButton");
-        createButton.disabled = this.value.trim().length == 0;
-
-        // Auto submit on enter key
-        if (event.key === 'Enter') {
-            createButton.click();
-        }
-    });
-    label.appendChild(input);
-
-    // Create button to create folder
-    var createButton = window.document.createElement('button');
-    createButton.id = "createButton";
-    createButton.className = "createFolderOverlayButton";
-    createButton.disabled = true;
-    createButton.innerText = "Create";
-    createButton.addEventListener("click", function(){ 
-        let fid = getAndIncrementNextFolderID();
-        var name = document.getElementById("createFolderName").value;
-        addFolder(fid, name);
-
-        hideOverlayCover();
-        overlayDiv.remove();
-
-        // TODO: Consider manually inserting the new DOM folder instead of reloading them all.
-        // Need to determine where to insert it for alpha order of folders
-        loadMainMenu();
-    });
-    overlayDiv.appendChild(createButton);
-
-    // Cancel button to exit folder creation
-    var cancelButton = window.document.createElement('button');
-    cancelButton.innerText = "Cancel";
-    cancelButton.addEventListener("click", function(){ 
-        hideOverlayCover();
-        overlayDiv.remove(); 
-    });
-    overlayDiv.appendChild(cancelButton);
-
-    // Add the div to the body to display it
-    document.body.appendChild(overlayDiv);
-
-    // Show the overlay cover
+    // Show overlays
     showOverlayCover();
+    document.getElementById("createFolderOverlay").classList.remove("remove");
 
     // Change focus to the name input
-    input.focus();
+    setTimeout(function() { document.getElementById("createFolderName").focus(); }, 50);
 }
 
 async function returnHome() {
@@ -360,13 +300,70 @@ function deletePuzzlesCancel() {
     }
 }
 
-function loadPlayOverlay(menuItem, id, event) {
+function playOverlayDifficultyClick(difficulty) {
+    let selected = difficulty.parentElement.querySelector(".playOverlayDifficultySelected");
+    if (selected && difficulty != selected) {
+        selected.classList.remove("playOverlayDifficultySelected");
+    }
+    difficulty.classList.add("playOverlayDifficultySelected");
+
+    document.getElementById("playButton").disabled = false;
+}
+
+function playOverlayOrientationInfoClick() {
+    const msg = "Piece orientation refers to how the pieces will be laid out on the board." + 
+        "<ul>" + 
+        "<li><font class='orientationOption0'>In standard mode</font>, pieces will always be oriented in the correct direction. A flat edge at the top of the piece is a top edge piece.</li>" + 
+        "<li><font class='orientationOption1'>In intermediate mode</font>, pieces can be oriented two ways (north, south). A flat edge at the top of the piece could be a top or bottom edge piece. A flat edge on the left side is a left edge piece.</li>" + 
+        "<li><font class='orientationOption2'>In advanced mode</font>, pieces can be oriented in four ways (north, south, east, west). A flat edge at the top could be an edge for any side of the puzzle. This best represents physical jigsaw puzzles and will make the puzzle far more challenging.</li></ul>" +
+        "TIP: To rotate a piece, left click and hold to pick the piece up. Then hit the [Alt] key to rotate.";
+    document.getElementById("infoOverlayText").innerHTML = msg;
+    document.getElementById("infoOverlay").classList.remove("remove");
+}
+
+function playOverlayOrientationSelectChange(orientationSelect) {
+    let span = orientationSelect.parentElement.querySelector(".playOverlayOrientationSpan");
+    if (orientationSelect.value != 0) {
+        span.classList.remove("playOverlayHidden");
+        span.classList.add("playOverlayVisible");
+    } else {
+        span.classList.add("playOverlayHidden");
+        span.classList.remove("playOverlayVisible");
+    }
+    orientationSelect.className = "orientationSelect orientationOption" + orientationSelect.value;
+}
+
+function playOverlayPlayButtonClick(playButton) {
+    // Capture the user's play selections
+    let playOverlay = playButton.parentElement;
+    const puzzleId = playOverlay.id.substring(1);
+    const difficulty = playOverlay.querySelector(".playOverlayDifficultySelected").id;
+    const orientation = playOverlay.querySelector(".orientationSelect").value;
+
+    hideOverlayCover();
+    playOverlay.remove();
+
+    // Transition to the create puzzle page
+    displayPage("page1", false);
+    setTimeout(function(){
+        displayPage("page2", true);
+        startPuzzle(puzzleId, difficulty, orientation);
+    }, 600);
+}
+
+function playOverlayCancelButtonClick(cancelButton) {
+    hideOverlayCover();
+    cancelButton.parentElement.remove();
+}
+
+function loadPlayOverlay(menuItem, event) {
+    
     // Clone the menuItem to use as the play overlay
     // Position it absolute right on top of its parent to start
     var playOverlay = menuItem.cloneNode(true);
     playOverlay.id = "_" + playOverlay.id;  // Assure unique id
     playOverlay.className = "playOverlay";
-    playOverlay.style.backgroundImage = menuItem.style.backgroundImage;
+    playOverlay.style.backgroundImage = menuItem.style.backgroundImage;     // TODO: Is this needed?
     playOverlay.style.position = "absolute";
     playOverlay.style.left = (event.pageX - event.offsetX) + "px";
     playOverlay.style.top = (event.pageY - event.offsetY) + "px";
@@ -376,146 +373,45 @@ function loadPlayOverlay(menuItem, id, event) {
     playOverlay.ondragend=null;
 
     // Select for difficulty - # of pieces 
-    let playOverlayDifficulties = window.document.createElement('div');
-    playOverlayDifficulties.className = "playOverlayDifficulties playOverlayHidden hidden";
-    let puzzle = getPuzzle(ACTIVE_FID, id);
-    let difficulties = getDifficulties(puzzle["aspectRatio"]);
+    let difficulties = window.document.createElement('div');
+    difficulties.className = "playOverlayDifficulties playOverlayHidden hidden";
+
     let index = 0;
-    for (let [pieces, dimensions] of Object.entries(difficulties)) {
-        let playOverlayDifficulty = window.document.createElement('div');
-        playOverlayDifficulty.id = dimensions;
-        playOverlayDifficulty.className = "playOverlayDifficulty";
-        playOverlayDifficulty.addEventListener("click", function() {
-            let selected = playOverlayDifficulties.querySelector(".playOverlayDifficultySelected");
-            if (selected && this != selected) {
-                selected.classList.remove("playOverlayDifficultySelected");
-            }
-            this.classList.add("playOverlayDifficultySelected");
+    let puzzle = getPuzzle(ACTIVE_FID, menuItem.id);
+    let availableDifficulties = getDifficulties(puzzle["aspectRatio"]);
+    for (let [pieces, dimensions] of Object.entries(availableDifficulties)) {
+        // Create difficulty from the clone template
+        let difficulty = window.document.getElementById("playOverlayDifficultyClone").cloneNode(true);
+        difficulty.id = dimensions;
 
-            document.getElementById("playButton").disabled = false;
-        });
+        difficulty.querySelector(".difficultyHeader").classList.add("difficulty" + index)
+        difficulty.querySelector(".difficultyTitle").textContent = pieces + " pieces";
+        difficulty.querySelector(".difficultySpan").textContent = DIFFICULTIES[index];
 
-        // Play difficulty header
-        var difficultyHeaderDiv = window.document.createElement('div');
-        difficultyHeaderDiv.className = "difficultyHeader difficulty" + index;
-        playOverlayDifficulty.appendChild(difficultyHeaderDiv);
-
-        // Play difficulty title
-        var difficultyTitleSpan = window.document.createElement('span');
-        difficultyTitleSpan.className = "difficultyTitle";
-        difficultyTitleSpan.textContent = pieces + " pieces";
-        playOverlayDifficulty.appendChild(difficultyTitleSpan);
-
-        var difficultySpan = window.document.createElement('span');
-        difficultySpan.className = "difficultySpan";
-        difficultySpan.textContent = DIFFICULTIES[index];
-        playOverlayDifficulty.appendChild(difficultySpan);
-
-        playOverlayDifficulties.appendChild(playOverlayDifficulty);
+        difficulties.appendChild(difficulty);
         index++;
     }
-    playOverlay.appendChild(playOverlayDifficulties);
+    playOverlay.appendChild(difficulties);
 
-    let playOverlayOrientation = window.document.createElement('div');
-    playOverlayOrientation.className = "playOverlayOrientation playOverlayHidden hidden";
-
-    // Play orientation header
-    var orientationHeaderDiv = window.document.createElement('div');
-    orientationHeaderDiv.className = "orientationHeader";
-    playOverlayOrientation.appendChild(orientationHeaderDiv);
-
-    // Play orientation title
-    var orientationTitleSpan = window.document.createElement('span');
-    orientationTitleSpan.className = "orientationTitle";
-    orientationTitleSpan.textContent = "Piece Orientation";
-
-    // Play info overlay describing piece orientation options
-    var orientationTitleInfoImg = window.document.createElement('img');
-    orientationTitleInfoImg.className = "orientationTitleInfoImg";
-    orientationTitleInfoImg.src = "assets/info-white.png";
-    orientationTitleInfoImg.title = "Click for detailed info on piece orientation options";
-    orientationTitleInfoImg.addEventListener("click", function() {
-        const msg = "Piece orientation refers to how the pieces will be laid out on the board." + 
-            "<ul>" + 
-            "<li><font class='orientationOption0'>In standard mode</font>, pieces will always be oriented in the correct direction. A flat edge at the top of the piece is a top edge piece.</li>" + 
-            "<li><font class='orientationOption1'>In intermediate mode</font>, pieces can be oriented two ways (north, south). A flat edge at the top of the piece could be a top or bottom edge piece. A flat edge on the left side is a left edge piece.</li>" + 
-            "<li><font class='orientationOption2'>In advanced mode</font>, pieces can be oriented in four ways (north, south, east, west). A flat edge at the top could be an edge for any side of the puzzle. This best represents physical jigsaw puzzles and will make the puzzle far more challenging.</li></ul>" +
-            "TIP: To rotate a piece, left click and hold to pick the piece up. Then hit the [Alt] key to rotate.";
-        document.getElementById("infoOverlayText").innerHTML = msg;
-        document.getElementById("infoOverlay").classList.remove("remove");
-    });
-    orientationTitleSpan.appendChild(orientationTitleInfoImg);
-    playOverlayOrientation.appendChild(orientationTitleSpan);
-
-    // Play orientation select
-    let orientationSelect = window.document.createElement('select');
-    orientationSelect.className = "orientationSelect";
-    for (let [index, label] of ORIENTATIONS.entries()) {
-        let orientation = window.document.createElement('option');
-        orientation.className = "orientationOption" + index;
-        orientation.value = index;
-        orientation.innerText = label;
-        orientation.selected = (index == 0);
-        orientationSelect.appendChild(orientation);
-    }
-    orientationSelect.addEventListener("change", function() {
-        var span = document.getElementById("playOverlayOrientationSpan");
-        if (this.value != 0) {
-            span.classList.remove("playOverlayHidden");
-            span.classList.add("playOverlayVisible");
-        } else {
-            span.classList.add("playOverlayHidden");
-            span.classList.remove("playOverlayVisible");
-        }
-        this.className = "orientationSelect orientationOption" + this.value;
-    });
-    playOverlayOrientation.appendChild(orientationSelect);
-
-    let orientationSpan = window.document.createElement('span');
-    orientationSpan.id = "playOverlayOrientationSpan";
-    orientationSpan.className = "playOverlayOrientationSpan playOverlayHidden";
-    orientationSpan.innerText = "  * [Alt] key to rotate";
-    playOverlayOrientation.appendChild(orientationSpan);
-    
-    playOverlay.appendChild(playOverlayOrientation);
+    // Create orientation container from the clone template
+    let orientation = window.document.getElementById("playOverlayOrientationClone").cloneNode(true);
+    orientation.id = "playOverlayOrientation";
+    playOverlay.appendChild(orientation);
 
     // Play button
-    var playButton = window.document.createElement('button');
+    var playButton = document.getElementById("playButtonClone").cloneNode(true);
     playButton.id = "playButton";
-    playButton.className = "playOverlayButton playOverlayHidden hidden";
-    playButton.disabled = true;
-    playButton.innerText = "Play now";
-    playButton.addEventListener("click", function(){ 
-        // Capture the user's play selections
-        const puzzleId = playOverlay.id.substring(1);
-        const difficulty = playOverlayDifficulties.querySelector(".playOverlayDifficultySelected").id;
-        const orientation = orientationSelect.value;
-
-        hideOverlayCover();
-        playOverlay.remove();
-
-        // Transition to the create puzzle page
-        displayPage("page1", false);
-        setTimeout(function(){
-            displayPage("page3", true);
-            startPuzzle(puzzleId, difficulty, orientation);
-        }, 600);
-    });
     playOverlay.appendChild(playButton);
 
     // Cancel button to exit folder creation
-    var cancelButton = window.document.createElement('button');
-    cancelButton.className = "playOverlayHidden hidden";
-    cancelButton.innerText = "Cancel";
-    cancelButton.addEventListener("click", function(){ 
-        hideOverlayCover();
-        playOverlay.remove();
-    });
+    var cancelButton = document.getElementById("cancelButtonClone").cloneNode(true);
+    cancelButton.id = "cancelButton";
     playOverlay.appendChild(cancelButton);
 
+    // Render the play overlay
     document.body.appendChild(playOverlay);
 
-    // Transition to the play overlay. Must be delayed for playOverlay to be drawn on screen or animations won't trigger.
+    // Transition to the centered play overlay. Must be delayed for playOverlay to be drawn on screen or animations won't trigger.
     setTimeout(function() {
         // Bring up the overlay cover
         showOverlayCover();
@@ -526,24 +422,25 @@ function loadPlayOverlay(menuItem, id, event) {
         // Set background transparency to make play options more visible
         playOverlay.style.backgroundImage = "linear-gradient(rgba(255,255,255,0.5), rgba(255,255,255,0.5)), " + playOverlay.style.backgroundImage;
 
-        // Make play options visible
+        // Make play options visible after the transition animations finish
         setTimeout(function() {
             // Bring them into the DOM before starting transitions
-            playOverlayDifficulties.classList.remove("hidden");
-            playOverlayOrientation.classList.remove("hidden");
+            difficulties.classList.remove("hidden");
+            orientation.classList.remove("hidden");
             playButton.classList.remove("hidden");
             cancelButton.classList.remove("hidden");
 
-            playOverlayDifficulties.classList.add("playOverlayVisible");
-            playOverlayDifficulties.classList.remove("playOverlayHidden");
-            playOverlayOrientation.classList.add("playOverlayVisible");
-            playOverlayOrientation.classList.remove("playOverlayHidden");
+            // Start transitions
+            difficulties.classList.add("playOverlayVisible");
+            difficulties.classList.remove("playOverlayHidden");
+            orientation.classList.add("playOverlayVisible");
+            orientation.classList.remove("playOverlayHidden");
             playButton.classList.add("playOverlayVisible");
             playButton.classList.remove("playOverlayHidden");
             cancelButton.classList.add("playOverlayVisible");
             cancelButton.classList.remove("playOverlayHidden");
         }, 1000);
-    }, 50);
+    }, 100);
 }
 
 function createPuzzle() {
@@ -561,19 +458,20 @@ function createPuzzle() {
             var createPuzzlePreview = document.getElementById("createPuzzlePreview");
             createPuzzlePreview.src = URL.createObjectURL(fileOpener.files[0]);
 
-            // TODO: If image resolution is too small, kick back to main menu page and alert user to choose a different image
+            createPuzzlePreview.onload = function() {
+                // TODO: If image resolution is too small, kick back to main menu page and alert user to choose a different image
+                
+                // Default to nearest supported aspect ratio of uploaded photo
+                let aspectRatio = determineAspectRatio({ width: this.width, height: this.height });
+                document.getElementById("createPuzzleAspectRatio").value = aspectRatio[0] + ":" + aspectRatio[1];
+            }
 
-            // Instanciate the image cropper tool
-            setTimeout(cropImage, 300);
- 
-            // Transition to the create puzzle page
-            displayPage("page1", false);
-            setTimeout(function(){
-                displayPage("page2", true);
-                setTimeout(function() { 
-                    createPuzzleName.focus();
-                }, 600);
-            }, 600);
+            // Show the overlays
+            showOverlayCover();
+            document.getElementById("createPuzzleOverlay").classList.remove("remove");
+
+            // Change focus to the name input
+            setTimeout(function() { createPuzzleName.focus(); }, 50);
         }
     });
 
@@ -581,10 +479,38 @@ function createPuzzle() {
     fileOpener.click();
 }
 
-function cropImage() {
+function createPuzzleStep2() {
+    // Transition overlay to step 2 (choosing aspect ratio and cropping image)
+    document.getElementById("createPuzzleOverlay").classList.add("createPuzzleOverlayTransition");
+    document.getElementById("createPuzzleNameLabel").classList.add("remove");
+    document.getElementById("createPuzzleTitle").innerText = document.getElementById("createPuzzleName").value.trim();
+    document.getElementById("createPuzzleAspectRatioWrapper").classList.remove("remove");
+    
+    document.getElementById("createPuzzlePreview").classList.remove("createPuzzleThumbnail");
+    document.getElementById("createPuzzlePreview").classList.add("createPuzzlePreview");
+
+    document.getElementById("createPuzzleNextButton").classList.add("remove");
+    document.getElementById("createPuzzleSaveButton").classList.remove("remove");
+    
+    // Instanciate the image cropper tool
+    let aspectRatio = document.getElementById("createPuzzleAspectRatio").value.split(":");
+    aspectRatio = parseInt(aspectRatio[1]) / parseInt(aspectRatio[0]);
+    cropImage(aspectRatio); 
+}
+
+// Destroy and recreate the cropper with teh new aspect ratio setting
+// @param aspectRatio - string - "x:y"
+function changeAspectRatio(aspectRatio) {
+    aspectRatio = aspectRatio.split(":");
+    CROPPER.options.aspectRatio = parseInt(aspectRatio[1]) / parseInt(aspectRatio[0]);
+    CROPPER.reset();
+}
+
+// @param aspectRatio - [integer, integer] - [width, height]
+function cropImage(aspectRatio) {
     CROPPER = new Croppr('#createPuzzlePreview', {
         minSize: { width: 175, height: 175 },
-        aspectRatio: [3,2]
+        aspectRatio: aspectRatio
     });
     
     // Due to a bug somewhere in the Croppr lib, a reset after rendering is required to catch the correct sizing of the parent container
@@ -662,33 +588,38 @@ async function makePuzzle() {
 
     // Save the new puzzle
     var title = createPuzzleName.value.trim();
-    var aspectRatio = determineAspectRatio(cropSize);
+    let aspectRatio = document.getElementById("createPuzzleAspectRatio").value.split(":");
+    aspectRatio =[parseInt(aspectRatio[0]), parseInt(aspectRatio[1])];
     savePuzzleFromAttrs(ACTIVE_FID, pid, title, aspectRatio);
 
     // Reload the puzzles to include the new entry
     await loadMainMenu();
 
-    // Transition to the main menu
-    displayPage("page2", false);
-    setTimeout(function(){displayPage("page1", true)}, 600);
+    closePuzzleOverlay();
 }
 
-// Finds the greatest common denominator of 2 passed integers
-// @param a - integer
-// @param b - integer
-function findGCD(a, b) {
-    if ( b === 0 ) {
-        return a;
-    }
-    return findGCD(b, a % b);
-}
-
+// @param dimensions - { width: integer, height: integer }
+// @return [integer, integer] - A supported aspect ratio
 function determineAspectRatio(dimensions) {
-    // Determine aspect ratio, in fraction
-    let gcd = findGCD(dimensions.width, dimensions.height);
-    let x = dimensions.width / gcd;
-    let y = dimensions.height / gcd;
-    return [x,y];
+    const ratio = dimensions.width / dimensions.height;
+    
+    // Supported ratios
+    // 2:3 = 0.66...
+    // 3:4 = 0.75
+    // 1:1 = 1
+    // 4:3 = 1.33...
+    // 3:2 = 1.5
+    if (ratio <= .71) {
+        return [2,3];
+    } else if (ratio <= .875) {
+        return [3,4];
+    } else if (ratio <= 1.17) {
+        return [1,1];
+    } else if (ratio <= 1.42) {
+        return [4,3];
+    } else {
+        return [3,2];
+    }
 }
 
 function getDifficulties(aspectRatio) {
@@ -761,16 +692,30 @@ async function saveCanvasToPng(canvas, dir, filename) {
     await writeFile(newFile, pngBlob);
 }
 
-function cancelPuzzle() {
-    // Destroy cropper for resource cleanup
-    destroyCropper()
+function closePuzzleOverlay() {
+    // Hide overlays
+    document.getElementById("createPuzzleOverlay").classList.add("remove");
+    hideOverlayCover();
 
-    // Transition to the main menu
-    displayPage("page2", false);
-    setTimeout(function(){displayPage("page1", true)}, 600);
+    // Destroy cropper for resource cleanup
+    destroyCropper();
+
+    // Reset overlay components (reverse of step 1/2)
+    document.getElementById("createPuzzleOverlay").classList.remove("createPuzzleOverlayTransition");
+    document.getElementById("createPuzzleNameLabel").classList.remove("remove");
+    document.getElementById("createPuzzleName").value = "";
+    document.getElementById("createPuzzleTitle").innerText = "Name your new puzzle";
+    document.getElementById("createPuzzleAspectRatioWrapper").classList.add("remove");
+
+    document.getElementById("createPuzzlePreview").src = "#";
+    document.getElementById("createPuzzlePreview").classList.add("createPuzzleThumbnail");
+    document.getElementById("createPuzzlePreview").classList.remove("createPuzzlePreview");
+
+    document.getElementById("createPuzzleNextButton").classList.remove("remove");
+    document.getElementById("createPuzzleSaveButton").classList.add("remove");
 }
 
-// @input title - string
+// @param title - string
 function formatTitle(title) {
     // Trim file type
     title = title.substring(0, title.lastIndexOf("."));
@@ -806,8 +751,8 @@ function displayPage(id, show) {
     }
 }
 
-// @input pid - integer - puzzle ID
-// @input dimensions - {x, y, width, height}
+// @param pid - integer - puzzle ID
+// @param dimensions - {x, y, width, height}
 async function generatePuzzleImages(pid, dimensions) {
     // Get the user selected image
     const image = document.getElementById('createPuzzlePreview');
