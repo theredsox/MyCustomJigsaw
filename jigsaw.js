@@ -590,7 +590,7 @@ async function makePuzzle() {
     var title = createPuzzleName.value.trim();
     let aspectRatio = document.getElementById("createPuzzleAspectRatio").value.split(":");
     aspectRatio =[parseInt(aspectRatio[0]), parseInt(aspectRatio[1])];
-    savePuzzleFromAttrs(ACTIVE_FID, pid, title, aspectRatio);
+    savePuzzleFromAttrs(ACTIVE_FID, pid, title, aspectRatio, cropSize.width, cropSize.height);
 
     // Reload the puzzles to include the new entry
     await loadMainMenu();
@@ -829,9 +829,303 @@ function hideOverlayCover() {
     document.getElementById("overlayCover").classList.add("remove");
 }
 
+function getRandomColor() {
+    var letters = '0123456789ABCDEF';
+    var color = '#';
+    for (var i = 0; i < 6; i++) {
+      color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+}
+
 // @param id - string - puzzle ID
 // @param difficulty - string - dimensions chosen - EX: "24x32"
 // @param orientation - integer - 0=no rotation, 1=north/south, 2=cardinal rotation
-function startPuzzle(id, difficulty, orientation) {
+async function startPuzzle(id, difficulty, orientation) {
     // TODO: prepare the board, build the pieces, spread them out on the board
+
+    // const filename = id + ".png";
+    // const png = await readFile("puzzles", filename);
+    let puzzle = getPuzzle(ACTIVE_FID, id);
+    let rowscols = difficulty.split("x");
+    let generator = new PuzzleGenerator(puzzle, parseInt(rowscols[1]), parseInt(rowscols[0]));
+    let pieces = generator.generatePieces();
+    
+    // Redo generatePieces() in the style of the example. Rows and then columns. Initialize the pieces
+    // when first looked for, make sure to share the sides that touch between pieces, store directly in
+    // the path format instead of []s since it seems all we'll do is feed them into Path2D objects. The
+    // id, row, and col should be enough for any reference needs without digging into the path string.
+
+    const canvas = document.getElementById('board');
+    // Set the canvas width and height
+    canvas.width = puzzle.width;
+    canvas.height = puzzle.height;
+    
+    const ctx = canvas.getContext('2d');
+    
+    ctx.lineWidth = 5;
+
+    for (let r = 0; r < generator.yn; r++) {
+        for (let c = 0; c < generator.xn; c++) {
+            let piece = pieces[r][c];
+            let paths = piece.top + " " + piece.right + " " + piece.bottom + " " + piece.left;
+            let path = new Path2D(paths);
+            ctx.strokeStyle = getRandomColor();
+            //ctx.fillStyle = ctx.strokeStyle;
+            ctx.stroke(path);
+            //ctx.fill(path);
+        }
+    }
+
+    // let p00 = pieces[0][0];
+    // let paths = p00.top + " " + p00.right + " " + p00.bottom + " " + p00.left;
+    // let piece = new Path2D(paths);
+    // ctx.strokeStyle = "Red";
+    // ctx.stroke(piece);
+
+    // let p10 = pieces[1][0];
+    // paths = p10.top + " " + p10.right + " " + p10.bottom + " " + p10.left;
+    // piece = new Path2D(paths);
+    // ctx.strokeStyle = "Green";
+    // ctx.stroke(piece);
+
+    // Options for putting the image onto the path2D
+    // EaselJS is simpliest lib lternative to native I've seen, but worry there are not enough usage examples and the docs don't provide much.
+    /*
+    // Load the image once. Create a pattern after it loads. Then "fill" all pieces with that pattern. 
+    // Not sure how moving those objects around the canvas after will impact the pattern though.
+    var img = new Image();
+    img.src = "http://www.gravatar.com/avatar/e555bd971bc2f4910893cd5b785c30ff?s=128&d=identicon&r=PG";
+    img.onload = function () {
+        var pattern = ctx.createPattern(img, "repeat");
+        ctx.fillStyle = pattern;
+        ctx.fill(path2d);
+    };
+    */
+   /*
+    // This approach seems more promising, in that it draws the image on the "clipped" content2d. So where
+    // the path2d is on the canvas shouldn't matter. May play better with dragging around.
+    // Concern is performance of drawing the image 1000 times. Though once the pieces are on the board, it'll
+    // usually be one at a time. Outside of the multi-select and sort options.
+    function clippedBackgroundImage( ctx, img, w, h ){
+        ctx.save(); // Save the context before clipping
+        ctx.clip(); // Clip to whatever path is on the context
+
+        var imgHeight = w / img.width * img.height;
+        if (imgHeight < h){
+            ctx.fillStyle = '#000';
+            ctx.fill();
+        }
+        ctx.drawImage(img,0,0,w,imgHeight);
+
+        ctx.restore(); // Get rid of the clipping region
+    }
+    function slashedRectWithBG( ctx, x, y, w, h, slash, img ){
+        ctx.save(); // Save the context before we muck up its properties
+        ctx.translate(x,y);
+        //ctx.beginPath();
+        //ctx.moveTo( slash, 0 );       //////////// 
+        //ctx.lineTo( w, 0 );          //         //
+        //ctx.lineTo( w, h-slash );   //          //
+        //ctx.lineTo( w-slash,h );    //          //
+        //ctx.lineTo( 0, h );         //         //
+        //ctx.lineTo( 0, slash );     ////////////
+        //ctx.closePath();
+        ctx.fill(path2d);
+        clippedBackgroundImage( ctx, img, w, h );
+        ctx.stroke();  // Now draw our path
+        ctx.restore(); // Put the canvas back how it was before we started
+    }
+   */
+}
+
+class PuzzlePiece {
+    // DOM Element ID for this piece
+    id;
+
+    // Integers representing this piece's location within the puzzle
+    row; col;
+
+    // Path2D strings representing a side of this piece
+    top; right; bottom; left;
+
+    constructor(id, row, col) {
+        this.id = id;
+        this.row = row;
+        this.col = col;
+    }
+}
+
+class PuzzleGenerator {
+    constructor(puzzleMetadata, rows, cols) {
+        this.width = puzzleMetadata.width;
+        this.height = puzzleMetadata.height;
+        this.yn = rows;
+        this.xn = cols;
+        this.radius = 0.0;
+    }
+
+    generatePieces() {
+        let pieces = [];
+        
+        this.generate_rows(pieces)
+        this.generate_columns(pieces);
+
+        return pieces;
+    }
+
+    getOrCreatePiece(pieces) {
+        let row = pieces[this.yi];
+        if (!row) {
+            row = [];
+            pieces[this.yi] = row;
+        }
+        let piece = row[this.xi];
+        if (!piece) {
+            piece = new PuzzlePiece(this.yi + ":" + this.xi, this.yi, this.xi);
+            pieces[this.yi][this.xi] = piece;
+        }
+        return piece;
+    }
+
+    generate_rows(pieces) {
+        this.vertical = 0;
+       
+        for (this.yi = 0; this.yi < this.yn; this.yi++) {
+            this.xi = 0;
+            this.first();
+
+            for (; this.xi < this.xn; this.xi++) {
+                let piece = this.getOrCreatePiece(pieces);
+
+                
+                // TODO: We cannot draw bottom left to right, the path needs to be a continuous draw for fill() to work.
+                //       So only top edge should start with a M. Bottom curve will need to be reversed and draw right to left
+                // Rows always drawn left to right from the relative 0,0 position
+                let startPoint = "M " + this.p0l() + " " + this.p0w();
+
+                // On the first row, set the top puzzle border edge
+                if (this.yi == 0) {
+                    let line = "L " + this.l(1.0) + " " + this.w(0.0);
+                    piece.top = startPoint + " " + line;
+                } else {
+                    // Internal curved edge
+                    let curve = "C " + this.p1l() + " " + this.p1w() + " " + this.p2l() + " " + this.p2w() + " " + this.p3l() + " " + this.p3w() + " ";
+                    curve += "C " + this.p4l() + " " + this.p4w() + " " + this.p5l() + " " + this.p5w() + " " + this.p6l() + " " + this.p6w() + " ";
+                    curve += "C " + this.p7l() + " " + this.p7w() + " " + this.p8l() + " " + this.p8w() + " " + this.p9l() + " " + this.p9w();
+                    
+                    // Set the top of the current piece
+                    piece.top = startPoint + " " + curve;
+
+                    // Set the bottom of the previous row piece, whose edge is shared with the top edge of this piece
+                    let prevPiece = pieces[this.yi - 1][this.xi];
+                    prevPiece.bottom = startPoint + " " + curve;
+                }
+                
+                // On the last row, set the bottom puzzle border edge
+                if (this.yi == (this.yn - 1)) {
+                    // Starting point is the bottom edge of puzzle at the starting width
+                    let startPoint = "M " + this.l(0.0) + " " + this.height;
+                    let line = "L " + this.l(1.0) + " " + this.height;
+                    piece.bottom = startPoint + " " + line;
+                }
+                
+                this.next();
+            }
+        }
+    }
+
+    generate_columns(pieces) {
+        this.vertical = 1;
+         
+        for (this.xi = 0; this.xi < this.xn; this.xi++) {
+            this.yi = 0
+            this.first();
+
+            for (; this.yi < this.yn; this.yi++) {
+                let piece = this.getOrCreatePiece(pieces);
+
+                // TODO: We cannot draw left top to bottom, the path needs to be a continuous draw for fill() to work.
+                //       So only top edge should have a start point. Left curve will need to be reversed and draw bottom to top.
+                // Columns always drawn top to bottom from the same starting point that the top is drawn left to right.
+                let startPoint = piece.top.split(' ').slice(0, 3).join(' ');
+
+                // On the first column, set the left puzzle border edge
+                if (this.xi == 0) {
+                    let line = "L " + this.w(0.0) + " " + this.l(1.0);
+                    piece.left = startPoint + " " + line;
+                } else {
+                    // Internal curved edge
+                    let curve = "C " + this.p1w() + " " + this.p1l() + " " + this.p2w() + " " + this.p2l() + " " + this.p3w() + " " + this.p3l() + " ";
+                    curve += "C " + this.p4w() + " " + this.p4l() + " " + this.p5w() + " " + this.p5l() + " " + this.p6w() + " " + this.p6l() + " ";
+                    curve += "C " + this.p7w() + " " + this.p7l() + " " + this.p8w() + " " + this.p8l() + " " + this.p9w() + " " + this.p9l();
+                    
+                    // Set the left of the current piece
+                    piece.left = startPoint + " " + curve;
+
+                    // Set the right of the previous column piece, whose edge is shared with the left edge of this piece
+                    let prevPiece = pieces[this.yi][this.xi - 1];
+                    prevPiece.right = startPoint + " " + curve;
+                }
+                
+                // On the last column, set the right puzzle border edge
+                if (this.xi == (this.xn - 1)) {
+                    // Starting point is the right edge of puzzle at the starting height
+                    let startPoint = "M " + this.width + " " + this.l(0.0);
+                    let line = "L " + this.width + " " + this.l(1.0);
+                    piece.right = startPoint + " " + line;
+                }
+
+                this.next();
+            }
+        }
+    }
+
+    // Internals for edge generation
+    a; b; c; d; e; t; j; flip; xi; yi; xn; yn; vertical; offset = 0; width; height; radius; seed = 1;
+    
+    random() { var x = Math.sin(this.seed) * 10000; this.seed += 1; return x - Math.floor(x); }
+    uniform(min, max) { var r = this.random(); return min + r * (max - min); }
+    rbool() { return this.random() > 0.5; }
+    
+    first() { this.e = this.uniform(-this.j, this.j); this.next();}
+    next()  { this.seeds(); var flipold = this.flip; this.flip = this.rbool(); this.a = (this.flip == flipold ? -this.e: this.e); this.b = this.uniform(-this.j, this.j); this.c = this.uniform(-this.j, this.j); this.d = this.uniform(-this.j, this.j); this.e = this.uniform(-this.j, this.j);}
+    
+    sl()  { return this.vertical ? this.height / this.yn : this.width / this.xn; }
+    sw()  { return this.vertical ? this.width / this.xn : this.height / this.yn; }
+    ol()  { return this.offset + this.sl() * (this.vertical ? this.yi : this.xi); }
+    ow()  { return this.offset + this.sw() * (this.vertical ? this.xi : this.yi); }
+    l(v)  { var ret = this.ol() + this.sl() * v; return Math.round(ret * 100) / 100; }
+    w(v)  { var ret = this.ow() + this.sw() * v * (this.flip ? -1.0 : 1.0); return Math.round(ret * 100) / 100; }
+    p0l() { return this.l(0.0); }
+    p0w() { return this.w(0.0); }
+    p1l() { return this.l(0.2); }
+    p1w() { return this.w(this.a); }
+    p2l() { return this.l(0.5 + this.b + this.d); }
+    p2w() { return this.w(-this.t + this.c); }
+    p3l() { return this.l(0.5 - this.t + this.b); }
+    p3w() { return this.w(this.t + this.c); }
+    p4l() { return this.l(0.5 - 2.0 * this.t + this.b - this.d); }
+    p4w() { return this.w(3.0 * this.t + this.c); }
+    p5l() { return this.l(0.5 + 2.0 * this.t + this.b - this.d); }
+    p5w() { return this.w(3.0 * this.t + this.c); }
+    p6l() { return this.l(0.5 + this.t + this.b); }
+    p6w() { return this.w(this.t + this.c); }
+    p7l() { return this.l(0.5 + this.b + this.d); }
+    p7w() { return this.w(-this.t + this.c); }
+    p8l() { return this.l(0.8); }
+    p8w() { return this.w(this.e); }
+    p9l() { return this.l(1.0); }
+    p9w() { return this.w(0.0); }
+    randomNum(min, max, decimals) {
+        var precision = Math.pow(10, decimals);
+        min *= precision;
+        max *= precision;
+        return Math.floor((Math.random() * (max - min)) + min) / precision;
+    }
+    seeds(){ 
+        this.seed = Math.random() * 10000;
+        this.t = this.randomNum(20, 25, 1) / 200.0;
+        this.j = this.randomNum(0, 5, 1) / 100.0;
+    }
 }

@@ -60,11 +60,15 @@ function savePuzzle(fid, pid, puzzle) {
 // @param pid - string - puzzle ID
 // @param title - string - puzzle title
 // @param aspectRatio - [number, number] - image aspect ratio in [x, y]
-function savePuzzleFromAttrs(fid, pid, title, aspectRatio) {
+// @param width - integer - image width in px
+// @param height - integer - image height in px
+function savePuzzleFromAttrs(fid, pid, title, aspectRatio, width, height) {
     let puzzles = getPuzzles(fid);
     puzzles[pid] = {
         title: title,
-        aspectRatio: aspectRatio
+        aspectRatio: aspectRatio,
+        width: width,
+        height: height
     };
     savePuzzles(fid, puzzles);
 }

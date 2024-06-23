@@ -579,3 +579,9 @@ ul {
     display: block;
     margin: 5px 5px 0px 0px;
 }
+
+.board {
+    background-color: #5eb4ff;
+    height: calc(100vh);
+    width: 100%;
+}
