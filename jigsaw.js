@@ -5,7 +5,8 @@
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
 // * Consider if the pan space aspect ratio should be based on board instead of puzzle image
 //  - Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
-//  - Low: puzzle image for reference, buckets, sound effects + on/off toggle during play
+// * Hide disk space, import, and export buttons. replace with play buttons for image reference toggle, sound effects on/off, and future buttons
+//  - Low: puzzle image for reference, sound effects + on/off toggle during play, buckets
 // * Puzzle piece CSS; can we make the pieces look 3d a bit with a softer border that flattens
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
