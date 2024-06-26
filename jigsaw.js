@@ -1,8 +1,12 @@
 // Priority TODOs
 // * Initial play functionality:
-//  - High: board resizing, zoom levels, stuffle, snap, and rotate pieces
-//  - Medium: more controls: right click = zoom on piece, left click+alt = rotate, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag to overflow hidden spots
-//  - Low: puzzle image for reference, buckets, sound on/off
+//  - High: snap, and rotate pieces (left click+alt and mouse hover+alt)
+// * Disable resizing/rotating...etc on group selection left click + drag
+// * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
+// * Consider if the pan space aspect ratio should be based on board instead of puzzle image
+//  - Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
+//  - Low: puzzle image for reference, buckets, sound effects + on/off toggle during play
+// * Puzzle piece CSS; can we make the pieces look 3d a bit with a softer border that flattens
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
 // * Add a Rename button 
@@ -18,6 +22,9 @@
 
 // Tracks the active folder for the puzzle menu
 var ACTIVE_FID = "root";
+
+// Tracks the FabricJS canvas object used for rendering the play board
+var BOARD;
 
 // Tracks the singleton image cropper object used for creating new puzzles
 var CROPPER;
@@ -39,6 +46,11 @@ window.onresize = function() {
         // Reset the cropper positioning on window resize since the image may scale
         // NOTE: Does not appear a debounce is needed for performance, but keep an eye on it
         CROPPER.reset(); 
+    }
+
+    if (BOARD) {
+        BOARD.setWidth(window.innerWidth - 20);
+        BOARD.setHeight(window.innerHeight - 80);
     }
 }
 
@@ -837,6 +849,97 @@ function getRandomColor() {
     return color;
 }
 
+// Try to keep the board view (BOARD.width/BOARD.height) view within pan boundaries (BOARD.panWidth/BOARD.panHeight). 
+// At widest zoom levels, depending on the puzzle and window ratios, the width or height may be completely in view. 
+// If so, balance the "blank" (unusable) space between top/bottom or left/right.
+// 
+// EX: If zooming out while mouse is in the [0,0] corner, user should never see to the left or 
+//     above [0,0]. So adjust the "center" of the view to keep the edge at [0,0] as long as possible.
+//     At zoom levels showing entire width or height, we will start showing below [0,0].
+function respectBoardPanBoundaries(event) {
+    // var vpt = this.viewportTransform;
+    // var vpb = BOARD.calcViewportBoundaries();
+    // var pAbs = BOARD.getPointer(event, true);
+    // var pRel = BOARD.getPointer(event, false);
+    
+    // vpt[4] = x coord
+    // vpt[5] = y coord
+    // BOARD.backgroundImage = the "pan board" rectangle, maybe its coords can help determine if shifting x/y is needed
+    // TODO: Determine if any visible point of the board is outside BOARD.panWidth/BOARD.panHeight
+}
+
+function respectZoomMinMax(zoom) {
+    let puzzle = BOARD.puzzle;
+    let ratio = Math.sqrt((puzzle.width * puzzle.height) / (BOARD.getWidth() * BOARD.getHeight()));
+    let min = .25/ratio;
+    let max = 3/ratio;
+
+    if (zoom > max) {
+        zoom = max;
+    } else if (zoom < min) {
+        zoom = min;
+    }
+    return zoom;
+}
+
+// Decimal percent to zoom, must be between .25 and 3
+function zoomTo(percent) {
+    let puzzle = BOARD.puzzle;
+    let ratio = Math.sqrt((puzzle.width * puzzle.height) / (BOARD.getWidth() * BOARD.getHeight()));
+    let zoom = percent/ratio;
+    
+    return respectZoomMinMax(zoom);
+}
+
+function configureBoardEvents() {
+
+    BOARD.on('mouse:wheel', function(opt) {
+        var delta = opt.e.deltaY;
+        var zoom = BOARD.getZoom();
+        zoom *= 0.999 ** delta;
+        zoom = respectZoomMinMax(zoom);
+        BOARD.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+        
+        // If zooming out, more board space is being made visible. Respect the board pan boundaries.
+        if (delta > 0) {
+            respectBoardPanBoundaries(opt.e);
+        }
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
+    });
+    BOARD.on('mouse:down', function(opt) {
+        var evt = opt.e;
+        if (evt.altKey === true) {
+            this.isDragging = true;
+            this.selection = false;
+            this.lastPosX = evt.clientX;
+            this.lastPosY = evt.clientY;
+        }
+    });
+    BOARD.on('mouse:move', function(opt) {
+        if (this.isDragging) {
+            var e = opt.e;
+            var vpt = this.viewportTransform;
+            vpt[4] += e.clientX - this.lastPosX;
+            vpt[5] += e.clientY - this.lastPosY;
+            
+            respectBoardPanBoundaries(e);            
+            
+            this.requestRenderAll();
+            this.lastPosX = e.clientX;
+            this.lastPosY = e.clientY;
+          }
+    });
+    BOARD.on('mouse:up', function(opt) {
+        // on mouse up we want to recalculate new interaction
+        // for all objects, so we call setViewportTransform
+        this.setViewportTransform(this.viewportTransform);
+        this.isDragging = false;
+        this.selection = true;
+    });
+}
+
+
 // @param id - string - puzzle ID
 // @param difficulty - string - dimensions chosen - EX: "24x32"
 // @param orientation - integer - 0=no rotation, 1=north/south, 2=cardinal rotation
@@ -852,9 +955,25 @@ async function startPuzzle(id, difficulty, orientation) {
         let generator = new PuzzleGenerator(puzzle, parseInt(rowscols[1]), parseInt(rowscols[0]));
         let pieces = generator.generatePieces();
 
-        var canvas = new fabric.Canvas('board', {});
-        canvas.setWidth(puzzle.width);
-        canvas.setHeight(puzzle.height);
+        BOARD = new fabric.Canvas('board', {});
+        BOARD.puzzle = puzzle;
+        BOARD.pieces = pieces;
+        BOARD.setWidth(window.innerWidth - 20);
+        BOARD.setHeight(window.innerHeight - 80);
+        BOARD.panWidth = puzzle.width * 3;
+        BOARD.panHeight = puzzle.height * 3;
+
+        // TODO: Temp border for testing pan restriction movement, remove it
+        var bg = new fabric.Rect({ width: BOARD.panWidth, height: BOARD.panHeight, stroke: 'pink', strokeWidth: 10, fill: '', evented: false, selectable: false });
+        bg.fill = new fabric.Pattern(
+            { source: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAASElEQVQ4y2NkYGD4z0A6+M3AwMBKrGJWBgYGZiibEQ0zIInDaCaoelYyHYcX/GeitomjBo4aOGrgQBj4b7RwGFwGsjAwMDAAAD2/BjgezgsZAAAAAElFTkSuQmCC' },
+            function() { bg.dirty = true; BOARD.requestRenderAll() });
+        bg.canvas = BOARD;
+        BOARD.backgroundImage = bg;
+
+        // Set a wide initial zoom to see puzzle image and then shuffle take place
+        let zoom = zoomTo(.4);
+        BOARD.setZoom(zoom);
 
         // Creates a board with all the pieces and the background
         for (let r = 0; r < generator.yn; r++) {
@@ -865,10 +984,16 @@ async function startPuzzle(id, difficulty, orientation) {
                 path.hasBorders = false;
                 path.hasControls = false;
                 path.stroke = "black";
+                // TODO: Knock down the width for smaller resolution photos that choose a lot of pieces.
+                // So maybe based on Path size?
                 path.strokeWidth = 3;
                 path.lockRotation = true;
                 path.lockScalingX = true;
                 path.lockScalingY = true;
+
+                // Locking user movement until shuffling completes
+                path.lockMovementX = true;
+                path.lockMovementY = true;
 
                 // Set the image as the background
                 let pattern = new fabric.Pattern({
@@ -878,20 +1003,66 @@ async function startPuzzle(id, difficulty, orientation) {
                 pattern.offsetX = 0 - path.left;
                 pattern.offsetY = 0 - path.top;
                 path.set("fill", pattern);
-                canvas.add(path);
+
+                piece.object = path;
+                BOARD.add(path);
             }
         }
 
-        // TODO: Find the real way to scale down the canvas in fabricJS
-        let container = document.getElementsByClassName("canvas-container")[0];
-        container.style.maxWidth = "100%";
-        container.style.maxHeight = "calc(100vh - 90px)";
-
-        for (let canvas of container.getElementsByTagName('canvas')) {
-            canvas.style.maxWidth = "100%";
-            canvas.style.maxHeight = "calc(100vh - 90px)";
-        }
+        // Show the drawn puzzle for 3 seconds and then shuffle to start the game
+        setTimeout(function() {
+            configureBoardEvents();
+            shufflePieces();
+        }, 3000);
     };
+}
+
+function animatePath(path, prop, endPoint, render) {
+    fabric.util.animate({
+        startValue: path[prop],
+        endValue: endPoint,
+        duration: 2000,
+        onChange: function(value) {
+            path[prop] = value;
+            if (render) {
+                // Only one path object being animated will control canvas refresh for optimal performance
+                BOARD.renderAll();
+            }
+        },
+        onComplete: function() {
+            // Register the coordinates so the user can start interacting
+            path.setCoords();
+            
+            // Unlock the path to allow user movement
+            path.lockMovementX = false;
+            path.lockMovementY = false;
+        }
+    });
+}
+
+function shufflePieces() {
+    let puzzle = BOARD.puzzle;
+    let pieces = BOARD.pieces;
+    if (pieces.length < 1) {
+        return;
+    }
+
+    for (let r = 0; r < pieces.length; r++) {
+        const cols = pieces[r].length;
+        for (let c = 0; c < cols; c++) {
+            let piece = pieces[r][c];
+            let path = piece.object;
+            const render = (r == pieces.length - 1) && (c == cols - 1);
+
+            // Randomize piece placement across visible board space, margin of 100px
+            const buf = 100;
+            const top = Math.floor(Math.random() * ((2 * puzzle.height) - (2 * buf)) + buf);
+            const left = Math.floor(Math.random() * ((2 * puzzle.width) - (2 * buf)) + buf);
+
+            animatePath(path, 'top', top, render);
+            animatePath(path, 'left', left, render);
+        }
+    }
 }
 
 class PuzzlePiece {
@@ -903,6 +1074,9 @@ class PuzzlePiece {
 
     // Path2D strings representing a side of this piece
     top; right; bottom; left;
+
+    // The fabric Path object representing this piece
+    object;
 
     constructor(id, row, col) {
         this.id = id;
