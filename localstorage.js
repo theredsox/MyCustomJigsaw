@@ -13,6 +13,8 @@
 // {
 //      title: string
 //      aspectRatio: [number, number] - [x, y]
+//      width: integer
+//      height: integer
 // }
 
 function getAndIncrementNextPuzzleID() {

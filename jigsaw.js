@@ -1,9 +1,10 @@
 // Priority TODOs
 // * Initial play functionality:
-//  - High: snap, and rotate pieces (left click+alt and mouse hover+alt)
+//  - High: Rotate pieces (left click+alt and mouse hover+alt)
 // * Disable resizing/rotating...etc on group selection left click + drag
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
-// * Consider if the pan space aspect ratio should be based on board instead of puzzle image
+// BUG: Try to track down group snapping to single piece alignment bug that ocassionally pops up.
+// * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
 //  - Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
 // * Hide disk space, import, and export buttons. replace with play buttons for image reference toggle, sound effects on/off, and future buttons
 //  - Low: puzzle image for reference, sound effects + on/off toggle during play, buckets
@@ -850,6 +851,20 @@ function getRandomColor() {
     return color;
 }
 
+// @param object - fabric.Object
+// @param key - String - ('top', 'left')
+function getAbsolutePosition(object, key) {
+    // Groups use relative positioning for children. Oddly relative to the center of the group, a FabricJS choice.
+    if (object.group) {
+        if (key === 'top') {
+            return ((object.group.height/2) + object.top) + object.group.top
+        } else if (key === 'left') {
+            return ((object.group.width/2) + object.left) + object.group.left
+        }
+    }
+    return object[key];
+};
+
 // Try to keep the board view (BOARD.width/BOARD.height) view within pan boundaries (BOARD.panWidth/BOARD.panHeight). 
 // At widest zoom levels, depending on the puzzle and window ratios, the width or height may be completely in view. 
 // If so, balance the "blank" (unusable) space between top/bottom or left/right.
@@ -893,7 +908,6 @@ function zoomTo(percent) {
 }
 
 function configureBoardEvents() {
-
     BOARD.on('mouse:wheel', function(opt) {
         var delta = opt.e.deltaY;
         var zoom = BOARD.getZoom();
@@ -932,14 +946,152 @@ function configureBoardEvents() {
           }
     });
     BOARD.on('mouse:up', function(opt) {
-        // on mouse up we want to recalculate new interaction
-        // for all objects, so we call setViewportTransform
+        // On mouse up recalculate new interaction for all objects, so call setViewportTransform
         this.setViewportTransform(this.viewportTransform);
         this.isDragging = false;
         this.selection = true;
     });
+    BOARD.on('object:modified', function(opt) {
+        let a = opt.target;
+        a.setCoords();
+        
+        if (a.isType("path")) {
+            snapPiece(a);
+        } else if (a.isType("group")) {
+            for (let obj of a.getObjects()) {
+                snapPiece(obj);
+            }
+        }
+    });
 }
 
+function snapPiece(a) {
+    // Consider the adjascent pieces that could be snapped to
+    let aPiece = a.piece;
+    // Above
+    if (aPiece.row > 0) {
+        let above = BOARD.pieces[aPiece.row - 1][aPiece.col];
+        if (snap(a, above.object, "t")) {
+            return;
+        }
+    }
+    // Below
+    if (aPiece.row < BOARD.pieces.length - 1) {
+        let below = BOARD.pieces[aPiece.row + 1][aPiece.col];
+        if (snap(a, below.object, "b")) {
+            return;
+        }
+    }
+    // Left
+    if (aPiece.col > 0) {
+        let left = BOARD.pieces[aPiece.row][aPiece.col - 1];
+        if (snap(a, left.object, "l")) {
+            return;
+        }
+    }
+    // Right
+    if (aPiece.col < BOARD.pieces[0].length - 1) {
+        let right = BOARD.pieces[aPiece.row][aPiece.col + 1];
+        if (snap(a, right.object, "r")) {
+            return;
+        }
+    }
+}
+
+// @param a - fabric.Object - (Path or Group)
+// @param b - fabric.Object - (Path or Group)
+// @param dir - string - ("t"|"r"|"b"|"l") directions
+// @return boolean - true if snap was successful
+function snap(a, b, dir) {
+    // If both pieces are in the same group, already snapped
+    if (a.group && b.group && a.group == b.group) {
+        return;
+    }
+
+    // Get the relative positioning of the two points at their origin and current position
+    var aOrigPoint = a.originalCoords.tl;
+    var bOrigPoint = b.originalCoords.tl;
+    let origDiff = [aOrigPoint.x - bOrigPoint.x, aOrigPoint.y - bOrigPoint.y];
+
+    // The paths may be in groups now, so cannot use aCoords as those are relateive to the center of a group... odd FabricJS choice
+    let aPointX = getAbsolutePosition(a, 'left');
+    let bPointX = getAbsolutePosition(b, 'left');
+    let aPointY = getAbsolutePosition(a, 'top');
+    let bPointY = getAbsolutePosition(b, 'top');
+    let curDiff = [aPointX - bPointX, aPointY - bPointY];
+
+    // Compare the relative positioning to determine if they are within snap range
+    let xDiff = curDiff[0] - origDiff[0];
+    let yDiff = curDiff[1] - origDiff[1];
+    if (Math.abs(xDiff) <= BOARD.snap && Math.abs(yDiff) <= BOARD.snap) {
+        // Shift A exactly into place, as A is the piece being moved
+        a.left -= xDiff;
+        a.top -= yDiff;
+
+        // Merge or create a piece group so snapped pieces move together
+        if (!a.group && !b.group) {
+            BOARD.remove(a);
+            BOARD.remove(b);
+
+            // For top and left, use B's positioning for the group. Else use A's.
+            let useB = dir == "t" || dir == "l";
+            var group = new fabric.Group([ a, b ], {
+                left: useB ? b.left : a.left,
+                top: useB ? b.top : a.top
+            });
+            group.hasBorders = false;
+            group.hasControls = false;
+            group.lockRotation = true;
+            group.lockScalingX = true;
+            group.lockScalingY = true;
+
+            a.group = group;
+            b.group = group;
+
+            BOARD.add(group);
+        } else if (a.group && !b.group) {
+            BOARD.remove(b);
+            let group = a.group;
+            b.group = group;
+            group.addWithUpdate(b);
+        } else if (!a.group && b.group) {
+            BOARD.remove(a);
+            let group = b.group;
+            a.group = group;
+            group.addWithUpdate(a);
+        } else {
+            // Both have groups, reset the pieces and create a new combined group
+            BOARD.remove(a.group);
+            BOARD.remove(b.group);
+            
+            let objs = [...a.group.getObjects(), ...b.group.getObjects()];
+            for (obj of objs) {
+                obj.left = obj.originalCoords.tl.x;
+                obj.top = obj.originalCoords.tl.y;
+            }
+            let minX = Math.min(a.group.left, b.group.left);
+            let minY = Math.min(a.group.top, b.group.top);
+
+            var group = new fabric.Group(objs, {
+                left: minX,
+                top: minY
+            });
+            group.hasBorders = false;
+            group.hasControls = false;
+            group.lockRotation = true;
+            group.lockScalingX = true;
+            group.lockScalingY = true;
+
+            for (obj of objs) {
+                obj.group = group;
+            }
+
+            BOARD.add(group);
+        }
+        return true;
+    }
+    return false;
+}
 
 // @param id - string - puzzle ID
 // @param difficulty - string - dimensions chosen - EX: "24x32"
@@ -963,6 +1115,8 @@ async function startPuzzle(id, difficulty, orientation) {
         BOARD.setHeight(window.innerHeight - 80);
         BOARD.panWidth = puzzle.width * 3;
         BOARD.panHeight = puzzle.height * 3;
+        BOARD.perPixelTargetFind = true;
+        BOARD.snap = (generator.width / generator.xn) * .2; // X and Y equal due to supported aspect ratios
 
         // TODO: Temp border for testing pan restriction movement, remove it
         var bg = new fabric.Rect({ width: BOARD.panWidth, height: BOARD.panHeight, stroke: 'pink', strokeWidth: 10, fill: '', evented: false, selectable: false });
@@ -1005,8 +1159,11 @@ async function startPuzzle(id, difficulty, orientation) {
                 pattern.offsetY = 0 - path.top;
                 path.set("fill", pattern);
 
+                path.piece = piece;
                 piece.object = path;
                 BOARD.add(path);
+
+                path.originalCoords = {...path.aCoords};
             }
         }
 
@@ -1122,7 +1279,7 @@ class PuzzleGenerator {
         this.vertical = 0;
        
         for (this.yi = 0; this.yi < this.yn; this.yi++) {
-            this.xi = 0;
+            this.xi = 0;    // Needs to be set before first()
             this.first();
 
             for (; this.xi < this.xn; this.xi++) {
