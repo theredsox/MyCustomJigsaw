@@ -1,6 +1,9 @@
 // Priority TODOs
 // * Initial play functionality:
-//  - High: Rotate pieces (left click+alt and mouse hover+alt)
+// BUG: Do a snap() check after a piece rotation
+// BUG: rotate two top edge pieces 180 and put them together. The group created jumps around instead of being where the leftmost piece is. 
+//      Likely needs to chose coord for group based on rotation.
+// BUG: setOriginToCenter() - Adjust the center offset to calc from the 4 corners of the piece path instead of whole path.
 // * Disable resizing/rotating...etc on group selection left click + drag
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
 // BUG: Try to track down group snapping to single piece alignment bug that ocassionally pops up.
@@ -353,7 +356,7 @@ function playOverlayPlayButtonClick(playButton) {
     let playOverlay = playButton.parentElement;
     const puzzleId = playOverlay.id.substring(1);
     const difficulty = playOverlay.querySelector(".playOverlayDifficultySelected").id;
-    const orientation = playOverlay.querySelector(".orientationSelect").value;
+    const orientation = parseInt(playOverlay.querySelector(".orientationSelect").value);
 
     hideOverlayCover();
     playOverlay.remove();
@@ -852,18 +855,17 @@ function getRandomColor() {
 }
 
 // @param object - fabric.Object
-// @param key - String - ('top', 'left')
-function getAbsolutePosition(object, key) {
-    // Groups use relative positioning for children. Oddly relative to the center of the group, a FabricJS choice.
+function getAbsolutePosition(object) {
     if (object.group) {
-        if (key === 'top') {
-            return ((object.group.height/2) + object.top) + object.group.top
-        } else if (key === 'left') {
-            return ((object.group.width/2) + object.left) + object.group.left
-        }
+        // Groups use relative positioning for children. Oddly relative to the center of the group, a FabricJS choice.
+        var matrix = object.group.calcTransformMatrix();
+        var point = object.getPointByOrigin('left', 'top');
+        // TODO: Do we need to transformPoint() point by the object.calcTransformMatrix() first? Needs deeper snap testing
+        var pointOnCanvas = fabric.util.transformPoint(point, matrix)
+        return pointOnCanvas;
     }
-    return object[key];
-};
+    return object.aCoords.tl;
+}
 
 // Try to keep the board view (BOARD.width/BOARD.height) view within pan boundaries (BOARD.panWidth/BOARD.panHeight). 
 // At widest zoom levels, depending on the puzzle and window ratios, the width or height may be completely in view. 
@@ -924,11 +926,15 @@ function configureBoardEvents() {
     });
     BOARD.on('mouse:down', function(opt) {
         var evt = opt.e;
-        if (evt.altKey === true) {
+
+        // If there is no target, initiate dragging the board by default or if shift pressed start multi selection.
+        if (!opt.target && !evt.shiftKey) {
             this.isDragging = true;
             this.selection = false;
             this.lastPosX = evt.clientX;
             this.lastPosY = evt.clientY;
+        } else if (!opt.target && evt.shiftKey) {
+            this.selection = true;
         }
     });
     BOARD.on('mouse:move', function(opt) {
@@ -949,7 +955,7 @@ function configureBoardEvents() {
         // On mouse up recalculate new interaction for all objects, so call setViewportTransform
         this.setViewportTransform(this.viewportTransform);
         this.isDragging = false;
-        this.selection = true;
+        this.selection = false;
     });
     BOARD.on('object:modified', function(opt) {
         let a = opt.target;
@@ -963,6 +969,57 @@ function configureBoardEvents() {
             }
         }
     });
+    BOARD.on('mouse:over', function(opt) {
+        BOARD.overTarget = opt.target;
+    });
+    BOARD.on('mouse:out', function(opt) {
+        BOARD.overTarget = undefined;
+    });
+    
+    window.addEventListener("keydown", function(e) {
+        // Rotate piece
+        if (BOARD.orientation > 0 && e.key == "Alt" && BOARD.overTarget) {
+            // Grab a reference immediately since mouse:out can detach target during animation
+            let target = BOARD.overTarget;
+            if (!target.rotationInProgress) {
+                target.rotationInProgress = true; // Toggled off at the end of resetOrigin when the animation has finished
+                let angle = BOARD.orientation == 1 ? 180 : 90;
+                animatePath(target, 'angle', target.angle + angle, 250, true, setOriginToCenter, resetOrigin);
+            }
+            e.preventDefault();
+        }
+    });
+}
+
+function setOriginToCenter(path) {
+    console.log("rotateBefore2: [" + path.left + ", " + path.top + "]");
+    path._originalOriginX = path.originX;
+    path._originalOriginY = path.originY;
+    // TODO: Adjust this to offset for nubs on one side of the piece but not other.
+    // Can maybe use the 4 corners of the path points to center relative to those.
+    var center = path.getCenterPoint();
+    path.originX = 'center';
+    path.originY = 'center';
+    path.left = center.x;
+    path.top = center.y;
+}
+
+function resetOrigin(path) {
+    // Assures a clean integer 90 degree angle, animated rotation timing can leave it very slightly short on occasion.
+    path.straighten();
+
+    var originPoint = path.translateToOriginPoint(
+        path.getCenterPoint(),
+        path._originalOriginX,
+        path._originalOriginY);
+    path.originX = path._originalOriginX;
+    path.originY = path._originalOriginY;
+    path.left = originPoint.x;
+    path.top = originPoint.y;
+    path._originalOriginX = null;
+    path._originalOriginY = null;
+
+    path.rotationInProgress = false;
 }
 
 function snapPiece(a) {
@@ -998,6 +1055,14 @@ function snapPiece(a) {
     }
 }
 
+function getPathAngle(a) {
+    if (a.group) {
+        // Angle doesn't change after entering group. So need to combine with group angle to get current angle.
+        return a.angle + a.group.angle;
+    }
+    return a.angle;
+}
+
 // @param a - fabric.Object - (Path or Group)
 // @param b - fabric.Object - (Path or Group)
 // @param dir - string - ("t"|"r"|"b"|"l") directions
@@ -1008,25 +1073,46 @@ function snap(a, b, dir) {
         return;
     }
 
+    // If they are not rotated in the same direction, cannot snap
+    if (getPathAngle(a) % 360 != getPathAngle(b) % 360) {
+        return;
+    }
+
+    console.log(dir);
+
     // Get the relative positioning of the two points at their origin and current position
     var aOrigPoint = a.originalCoords.tl;
     var bOrigPoint = b.originalCoords.tl;
     let origDiff = [aOrigPoint.x - bOrigPoint.x, aOrigPoint.y - bOrigPoint.y];
+    console.log("origDiff: [" + aOrigPoint.x + " - " + bOrigPoint.x + ", " + aOrigPoint.y + " - " + bOrigPoint.y + "]");
 
     // The paths may be in groups now, so cannot use aCoords as those are relateive to the center of a group... odd FabricJS choice
-    let aPointX = getAbsolutePosition(a, 'left');
-    let bPointX = getAbsolutePosition(b, 'left');
-    let aPointY = getAbsolutePosition(a, 'top');
-    let bPointY = getAbsolutePosition(b, 'top');
-    let curDiff = [aPointX - bPointX, aPointY - bPointY];
+    let aPoint = getAbsolutePosition(a);
+    let bPoint = getAbsolutePosition(b);
+    let curDiff = [aPoint.x - bPoint.x, aPoint.y - bPoint.y];
+    console.log("curDiff: [" + aPoint.x + " - " + bPoint.x + ", " + aPoint.y + " - " + bPoint.y + "]");
 
     // Compare the relative positioning to determine if they are within snap range
-    let xDiff = curDiff[0] - origDiff[0];
-    let yDiff = curDiff[1] - origDiff[1];
+    let xDiff, yDiff;
+    if (getPathAngle(a) % 360 == 0) {
+        xDiff = curDiff[0] - origDiff[0];
+        yDiff = curDiff[1] - origDiff[1];
+    } else if (getPathAngle(a) % 360 == 180) {
+        xDiff = curDiff[0] + origDiff[0];
+        yDiff = curDiff[1] + origDiff[1];
+    }
+    console.log("xDiff/yDiff: " + xDiff + "/" + yDiff);
+    
     if (Math.abs(xDiff) <= BOARD.snap && Math.abs(yDiff) <= BOARD.snap) {
-        // Shift A exactly into place, as A is the piece being moved
-        a.left -= xDiff;
-        a.top -= yDiff;
+        console.log("SNAPPED!");
+        // Shift A exactly into place, as A is the piece being moved. If A is in a group, shift the group.
+        if (a.group) {
+            a.group.left -= xDiff;
+            a.group.top -= yDiff;    
+        } else {
+            a.left -= xDiff;
+            a.top -= yDiff;
+        }
 
         // Merge or create a piece group so snapped pieces move together
         if (!a.group && !b.group) {
@@ -1044,7 +1130,8 @@ function snap(a, b, dir) {
             group.lockRotation = true;
             group.lockScalingX = true;
             group.lockScalingY = true;
-
+            group.perPixelTargetFind = true;
+            
             a.group = group;
             b.group = group;
 
@@ -1081,6 +1168,7 @@ function snap(a, b, dir) {
             group.lockRotation = true;
             group.lockScalingX = true;
             group.lockScalingY = true;
+            group.perPixelTargetFind = true;
 
             for (obj of objs) {
                 obj.group = group;
@@ -1108,6 +1196,12 @@ async function startPuzzle(id, difficulty, orientation) {
         let generator = new PuzzleGenerator(puzzle, parseInt(rowscols[1]), parseInt(rowscols[0]));
         let pieces = generator.generatePieces();
 
+        // Performance optimization suggested by Chrome devtools
+        // TODO: May not be needed, may be triggered by my Dark Reader browser extension being active on the site.
+        let canvas = document.getElementById('board');
+        canvas.willReadFrequently = true;
+        canvas.getContext('2d', { willReadFrequently: true });
+
         BOARD = new fabric.Canvas('board', {});
         BOARD.puzzle = puzzle;
         BOARD.pieces = pieces;
@@ -1115,8 +1209,10 @@ async function startPuzzle(id, difficulty, orientation) {
         BOARD.setHeight(window.innerHeight - 80);
         BOARD.panWidth = puzzle.width * 3;
         BOARD.panHeight = puzzle.height * 3;
-        BOARD.perPixelTargetFind = true;
         BOARD.snap = (generator.width / generator.xn) * .2; // X and Y equal due to supported aspect ratios
+        BOARD.orientation = orientation;
+        BOARD.selection = false;
+        BOARD.altSelectionKey = "ctrlKey";
 
         // TODO: Temp border for testing pan restriction movement, remove it
         var bg = new fabric.Rect({ width: BOARD.panWidth, height: BOARD.panHeight, stroke: 'pink', strokeWidth: 10, fill: '', evented: false, selectable: false });
@@ -1175,11 +1271,15 @@ async function startPuzzle(id, difficulty, orientation) {
     };
 }
 
-function animatePath(path, prop, endPoint, render) {
+function animatePath(path, prop, endPoint, duration, render, onBeforeFunc, onCompleteFunc) {
+    if (onBeforeFunc) {
+        onBeforeFunc(path);
+    }
+
     fabric.util.animate({
         startValue: path[prop],
         endValue: endPoint,
-        duration: 2000,
+        duration: duration,
         onChange: function(value) {
             path[prop] = value;
             if (render) {
@@ -1188,6 +1288,10 @@ function animatePath(path, prop, endPoint, render) {
             }
         },
         onComplete: function() {
+            if (onCompleteFunc) {
+                onCompleteFunc(path);
+            }
+
             // Register the coordinates so the user can start interacting
             path.setCoords();
             
@@ -1213,12 +1317,16 @@ function shufflePieces() {
             const render = (r == pieces.length - 1) && (c == cols - 1);
 
             // Randomize piece placement across visible board space, margin of 100px
-            const buf = 100;
+            const buf = 300;
             const top = Math.floor(Math.random() * ((2 * puzzle.height) - (2 * buf)) + buf);
             const left = Math.floor(Math.random() * ((2 * puzzle.width) - (2 * buf)) + buf);
-
-            animatePath(path, 'top', top, render);
-            animatePath(path, 'left', left, render);
+            animatePath(path, 'top', top, 2000, render);
+            animatePath(path, 'left', left, 2000, render);
+            if (BOARD.orientation > 0) {
+                let angles = BOARD.orientation == 1 ? [0, 180] : [0, 90, 180, 270];
+                const randomIndex = Math.floor(Math.random() * angles.length);
+                animatePath(path, 'angle', angles[randomIndex] * Math.floor(Math.random() * 4), 2000, render, undefined, function(path) { path.straighten() });
+            }
         }
     }
 }
