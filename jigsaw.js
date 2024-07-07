@@ -1,4 +1,5 @@
 // Priority TODOs
+// * Finish zoom logic - setZoomPosition() - Cap the max zoom by available width and height instead of hardcoded 5x. 
 // * Puzzle piece CSS; can we make the pieces look 3d a bit with a softer border that flattens
 // * Add sound effects for pick up, drop, and rotate
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
@@ -923,14 +924,44 @@ function configureBoardEvents() {
     BOARD.on('mouse:down', function(opt) {
         var evt = opt.e;
 
-        // If there is no target, initiate dragging the board by default or if shift pressed start multi selection.
-        if (!opt.target && !evt.shiftKey) {
-            this.isDragging = true;
-            this.selection = false;
-            this.lastPosX = evt.clientX;
-            this.lastPosY = evt.clientY;
-        } else if (!opt.target && evt.shiftKey) {
-            this.selection = true;
+        // If there is no target
+        if (!opt.target) {
+            if (opt.shiftKey) {
+                // Start multi-select area
+                this.selection = true;
+            } else {
+                // Drag the board
+                this.isDragging = true;
+                this.selection = false;
+                this.lastPosX = evt.clientX;
+                this.lastPosY = evt.clientY;
+            }
+        } else if (opt.target) {
+            if (evt.which == "3" && !BOARD._zoomTarget) {
+                // Save the zoom target so it can unzoom even if not the target when right click is released
+                BOARD._zoomTarget = opt.target;
+
+                // Assure it'll be the front object for viewing
+                opt.target.bringToFront();
+
+                // Right click - Zoom piece
+                animatePath(opt.target, 'scaleX', 5, 500, true, function(path) {
+                    // Remember the original values for unzoom
+                    path._zoomScale = path.scaleX;
+                    path._zoomLeft = path.left;
+                    path._zoomTop = path.top;
+                }, function(path, curValue) {
+                    path.scale(curValue);
+                    setZoomPosition(path, curValue);
+                }, function(path) {
+                    path.setCoords();
+                });
+            }
+        }
+
+        // Disable browser mouse right click menu during gameplay
+        if (BOARD && evt.which == "3") {
+            evt.preventDefault();
         }
     });
     BOARD.on('mouse:move', function(opt) {
@@ -945,13 +976,46 @@ function configureBoardEvents() {
             this.requestRenderAll();
             this.lastPosX = e.clientX;
             this.lastPosY = e.clientY;
-          }
+        }
     });
     BOARD.on('mouse:up', function(opt) {
+        var evt = opt.e;
+
         // On mouse up recalculate new interaction for all objects, so call setViewportTransform
         this.setViewportTransform(this.viewportTransform);
         this.isDragging = false;
         this.selection = false;
+
+        if (evt.which == "3") {
+            let target = BOARD._zoomTarget;
+            if (target && !target.unzoomInProgress) {
+                target.unzoomInProgress = true;
+
+                // Right click - Unzoom piece
+                animatePath(target, 'scaleX', target._zoomScale, 500, true, function(path) {
+
+                }, function(path, curValue) {
+                    path.scale(curValue);
+                    setZoomPosition(path, curValue);
+                }, function(path) {
+                    path.left = path._zoomLeft;
+                    path.top = path._zoomTop;
+                    path.setCoords();
+                    path._zoomScale = null;
+                    path._zoomLeft = null;
+                    path._zoomTop = null;
+                    BOARD._zoomTarget = null;
+                    target.unzoomInProgress = false;
+                });
+            } else {
+                // Left click - Piece drop events
+            }
+        }
+
+        // Disable browser mouse right click menu during gameplay
+        if (BOARD && evt.which == "3") {
+            evt.preventDefault();
+        }
     });
     BOARD.on('object:modified', function(opt) {
         snapPathOrGroup(opt.target);
@@ -983,6 +1047,8 @@ function configureBoardEvents() {
                 }, function(path) {
                     path.rotationInProgress = false;
                     snapPathOrGroup(path);
+
+                    console.log(path.angle + "[" + path.left + "," + path.top + "]");
                 });
             }
         }
@@ -992,6 +1058,29 @@ function configureBoardEvents() {
             e.preventDefault();
         }
     });
+}
+
+function setZoomPosition(path, curValue) {
+    // Center the piece as zoom occurs
+    let per = (curValue - path._zoomScale)/(5 - path._zoomScale);
+    let endX = BOARD.getVpCenter().x - (path.getScaledWidth() / 2);
+    let endY = BOARD.getVpCenter().y - (path.getScaledHeight() / 2);
+    if ((path.angle) % 360 == 0) {
+        // Nothing additional to do
+    } else if ((path.angle) % 360 == 90) {
+        endX += path.getScaledWidth();
+    } else if ((path.angle) % 360 == 180) {
+        endX += path.getScaledWidth();
+        endY += path.getScaledHeight();
+    } else { // 270
+        endY += path.getScaledHeight();
+    }
+    path.left = ((1-per) * path._zoomLeft) + (per * endX);
+    path.top = ((1-per) * path._zoomTop) + (per * endY);
+
+    //TODO: scaleToHeight() - we could use this to cap the zoom to x% of board width and height instead of hardcoded 4x
+    //var boundingRectFactor = this.getBoundingRect(absolute).height / this.getScaledHeight();
+    //return this.scale(value / this.height / boundingRectFactor);
 }
 
 function centerOfPiece(path) {
@@ -1253,7 +1342,11 @@ async function startPuzzle(id, difficulty, orientation) {
         canvas.willReadFrequently = true;
         canvas.getContext('2d', { willReadFrequently: true });
 
-        BOARD = new fabric.Canvas('board', {});
+        BOARD = new fabric.Canvas('board', {
+            fireRightClick: true,
+            fireMiddleClick: true,
+            stopContextMenu: true,
+        });
         BOARD.puzzle = puzzle;
         BOARD.pieces = pieces;
         BOARD.setWidth(window.innerWidth - 20);
@@ -1292,6 +1385,7 @@ async function startPuzzle(id, difficulty, orientation) {
                 path.lockRotation = true;
                 path.lockScalingX = true;
                 path.lockScalingY = true;
+                path.perPixelTargetFind = true;
 
                 // Locking user movement until shuffling completes
                 path.lockMovementX = true;
