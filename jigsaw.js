@@ -1,6 +1,5 @@
 // Priority TODOs
 // * Puzzle piece CSS; pick up and drop shadow animation needs work. Also look into custom filter to warp the piece image around the edge
-// * BUG: Snapping two groups together doesn't place the combined group in the exact correct spot yet. 
 // * Add sound effects for pick up, drop, and rotate
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
 //  - Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
@@ -1247,6 +1246,7 @@ function snap(a, b, dir) {
                 a.group.left -= yDiff;
                 a.group.top -= xDiff;
             }
+            a.group.setCoords();
         } else {
             if (aPathAngle % 360 == 0 || aPathAngle % 360 == 180) {
                 a.left -= xDiff;
@@ -1255,135 +1255,134 @@ function snap(a, b, dir) {
                 a.left -= yDiff;
                 a.top -= xDiff;
             }
+            a.setCoords();
         }
-        
-        // After the shift happens, register the coords and render the board
-        // Needed so group work below is working with refreshed positioning
-        //a.setCoords();
-        //b.setCoords();
-        //BOARD.renderAll();
 
-        // Merge or create a piece group so snapped pieces move together
-        if (!a.group && !b.group) {
-            
-            // Determine the minimum point between the two pieces for placement of the new group
-            let point = getMinimumPoint(a, b);
-            
-            // Save the angle to set it back on the new group
-            let saveRotation = getPathAngle(a);
-
-            // Reset the pieces and create a new group
-            BOARD.remove(a);
-            BOARD.remove(b);
-
-            let objs = [a, b];
-            for (obj of objs) {
-                obj.rotate(0);
-                obj.left = obj.originalCoords.tl.x;
-                obj.top = obj.originalCoords.tl.y;
-            }
-
-            var group = new fabric.Group(objs, {});
-            group.hasBorders = false;
-            group.hasControls = false;
-            group.lockRotation = true;
-            group.lockScalingX = true;
-            group.lockScalingY = true;
-            group.perPixelTargetFind = true;
-            group._originX = 0.5;
-            group._originY = 0.5;
-
-            a.group = group;
-            b.group = group;
-
-            // Set the angle back on the new group
-            group.angle = saveRotation;
-
-            // Now that objects have been added and rotation handled, set the position of the group
-            if (saveRotation == 0) {
-                group.left = point[0];
-                group.top = point[1];
-            } else if (saveRotation == 90) {
-                group.left = point[0] + group.height;
-                group.top = point[1];
-            } else if (saveRotation == 180) {
-                group.left = point[0] + group.width;
-                group.top = point[1] + group.height;
-            } else if (saveRotation == 270) {
-                group.left = point[0];
-                group.top = point[1] + group.width;
-            }
-
-            BOARD.add(group);
-            setGroupShadow(group);
-        } else if (a.group && !b.group) {
-            BOARD.remove(b);
-            let group = a.group;
-            b.group = group;
-            group.addWithUpdate(b);
-            setGroupShadow(group);
-        } else if (!a.group && b.group) {
-            BOARD.remove(a);
-            let group = b.group;
-            a.group = group;
-            group.addWithUpdate(a);
-            setGroupShadow(group);
-        } else {
-            // Determine the minimum point between the two groups for placement of the new combined group
-            let point = getMinimumPoint(a.group, b.group);
-
-            // Save the angle to set it back on the new group
-            let saveRotation = getPathAngle(a);
-
-            // Both have groups, reset the pieces and create a new combined group
-            BOARD.remove(a.group);
-            BOARD.remove(b.group);
-            
-            let objs = [...a.group.getObjects(), ...b.group.getObjects()];
-            for (obj of objs) {
-                obj.rotate(0);
-                obj.left = obj.originalCoords.tl.x;
-                obj.top = obj.originalCoords.tl.y;
-            }
-            
-            var group = new fabric.Group(objs, {});
-            group.hasBorders = false;
-            group.hasControls = false;
-            group.lockRotation = true;
-            group.lockScalingX = true;
-            group.lockScalingY = true;
-            group.perPixelTargetFind = true;
-            group._originX = 0.5;
-            group._originY = 0.5;
-
-            for (obj of objs) {
-                obj.group = group;
-            }
-            
-            // Set the angle back on the new group
-            group.angle = saveRotation;
-            
-            // Now that objects have been added and rotation handled, set the position of the group
-            if (saveRotation == 0) {
-                group.left = point[0];
-                group.top = point[1];
-            } else if (saveRotation == 90) {
-                group.left = point[0] + group.height;
-                group.top = point[1];
-            } else if (saveRotation == 180) {
-                group.left = point[0] + group.width;
-                group.top = point[1] + group.height;
-            } else if (saveRotation == 270) {
-                group.left = point[0];
-                group.top = point[1] + group.width;
-            }
-
-            BOARD.add(group);
-            setGroupShadow(group);
-        }
+        updateGroups(a, b);
         return true;
     }
     return false;
+}
+
+function updateGroups(a, b) {
+    // Merge or create a piece group so snapped pieces move together
+    if (!a.group && !b.group) {
+            
+        // Determine the minimum point between the two pieces for placement of the new group
+        let point = getMinimumPoint(a, b);
+        
+        // Save the angle to set it back on the new group
+        let saveRotation = getPathAngle(a);
+
+        // Reset the pieces and create a new group
+        BOARD.remove(a);
+        BOARD.remove(b);
+
+        let objs = [a, b];
+        for (obj of objs) {
+            obj.rotate(0);
+            obj.left = obj.originalCoords.tl.x;
+            obj.top = obj.originalCoords.tl.y;
+        }
+
+        var group = new fabric.Group(objs, {});
+        group.hasBorders = false;
+        group.hasControls = false;
+        group.lockRotation = true;
+        group.lockScalingX = true;
+        group.lockScalingY = true;
+        group.perPixelTargetFind = true;
+        group._originX = 0.5;
+        group._originY = 0.5;
+
+        a.group = group;
+        b.group = group;
+
+        // Set the angle back on the new group
+        group.angle = saveRotation;
+
+        // Now that objects have been added and rotation handled, set the position of the group
+        if (saveRotation == 0) {
+            group.left = point[0];
+            group.top = point[1];
+        } else if (saveRotation == 90) {
+            group.left = point[0] + group.height;
+            group.top = point[1];
+        } else if (saveRotation == 180) {
+            group.left = point[0] + group.width;
+            group.top = point[1] + group.height;
+        } else if (saveRotation == 270) {
+            group.left = point[0];
+            group.top = point[1] + group.width;
+        }
+
+        BOARD.add(group);
+        setGroupShadow(group);
+    } else if (a.group && !b.group) {
+        BOARD.remove(b);
+        let group = a.group;
+        b.group = group;
+        group.addWithUpdate(b);
+        setGroupShadow(group);
+    } else if (!a.group && b.group) {
+        BOARD.remove(a);
+        let group = b.group;
+        a.group = group;
+        group.addWithUpdate(a);
+        setGroupShadow(group);
+    } else {
+        // Determine the minimum point between the two groups for placement of the new combined group
+        let point = getMinimumPoint(a.group, b.group);
+
+        // Save the angle to set it back on the new group
+        let saveRotation = getPathAngle(a);
+
+        // Both have groups, reset the pieces and create a new combined group
+        BOARD.remove(a.group);
+        BOARD.remove(b.group);
+        
+        let objs = [...a.group.getObjects(), ...b.group.getObjects()];
+        for (obj of objs) {
+            obj.rotate(0);
+            obj.left = obj.originalCoords.tl.x;
+            obj.top = obj.originalCoords.tl.y;
+        }
+        
+        var group = new fabric.Group(objs, {});
+        group.hasBorders = false;
+        group.hasControls = false;
+        group.lockRotation = true;
+        group.lockScalingX = true;
+        group.lockScalingY = true;
+        group.perPixelTargetFind = true;
+        group._originX = 0.5;
+        group._originY = 0.5;
+
+        for (obj of objs) {
+            obj.group = group;
+        }
+        
+        // Set the angle back on the new group
+        group.angle = saveRotation;
+
+        // Now that objects have been added and rotation handled, set the position of the group
+        if (saveRotation == 0) {
+            group.left = point[0];
+            group.top = point[1];
+        } else if (saveRotation == 90) {
+            group.left = point[0] + group.height;
+            group.top = point[1];
+        } else if (saveRotation == 180) {
+            group.left = point[0] + group.width;
+            group.top = point[1] + group.height;
+        } else if (saveRotation == 270) {
+            group.left = point[0];
+            group.top = point[1] + group.width;
+        }
+
+        BOARD.add(group);
+        setGroupShadow(group);
+    }
 }
 
 function setGroupShadow(group) {
