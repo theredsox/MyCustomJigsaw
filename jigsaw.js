@@ -1,5 +1,4 @@
 // Priority TODOs
-// * Finish zoom logic - setZoomPosition() - Cap the max zoom by available width and height instead of hardcoded 5x. 
 // * Puzzle piece CSS; can we make the pieces look 3d a bit with a softer border that flattens
 // * Add sound effects for pick up, drop, and rotate
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
@@ -944,8 +943,17 @@ function configureBoardEvents() {
                 // Assure it'll be the front object for viewing
                 opt.target.bringToFront();
 
+                // Determine the scale which will allow the object to zoom to 80% of the board size
+                if (BOARD.width > BOARD.height) {
+                    var boundingRectFactor = opt.target.getBoundingRect(false).height / opt.target.getScaledHeight();
+                    opt.target._maxScale = (BOARD.height * .8) / opt.target.height / boundingRectFactor;
+                } else {
+                    var boundingRectFactor = opt.target.getBoundingRect(false).width / opt.target.getScaledWidth();
+                    opt.target._maxScale = (BOARD.width * .8) / opt.target.width / boundingRectFactor;
+                }
+
                 // Right click - Zoom piece
-                animatePath(opt.target, 'scaleX', 5, 500, true, function(path) {
+                animatePath(opt.target, 'scaleX', opt.target._maxScale, 500, true, function(path) {
                     // Remember the original values for unzoom
                     path._zoomScale = path.scaleX;
                     path._zoomLeft = path.left;
@@ -1001,6 +1009,7 @@ function configureBoardEvents() {
                     path.left = path._zoomLeft;
                     path.top = path._zoomTop;
                     path.setCoords();
+                    path._maxScale = null;
                     path._zoomScale = null;
                     path._zoomLeft = null;
                     path._zoomTop = null;
@@ -1062,7 +1071,7 @@ function configureBoardEvents() {
 
 function setZoomPosition(path, curValue) {
     // Center the piece as zoom occurs
-    let per = (curValue - path._zoomScale)/(5 - path._zoomScale);
+    let per = (curValue - path._zoomScale)/(path._maxScale - path._zoomScale);
     let endX = BOARD.getVpCenter().x - (path.getScaledWidth() / 2);
     let endY = BOARD.getVpCenter().y - (path.getScaledHeight() / 2);
     if ((path.angle) % 360 == 0) {
