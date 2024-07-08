@@ -1,5 +1,5 @@
 // Priority TODOs
-// * Puzzle piece CSS; pick up and drop shadow animation needs work. Also look into custom filter to warp the piece image around the edge
+// * Puzzle piece CSS; Look into custom filter to warp the piece image around the edge
 // * Add sound effects for pick up, drop, and rotate
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
 //  - Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
@@ -939,14 +939,20 @@ function configureBoardEvents() {
             // Left click - Pick up piece
             if (evt.which == 1) {
                 // Initiate a shadow object
-                // opt.target._shadow = opt.target.shadow;     // Save original shadow
-                // var shadow = new fabric.Shadow({
-                //     color: "black",
-                //     blur: 4,
-                //     offsetX: 30,
-                //     offsetY: 30,
-                // });
-                // opt.target.setShadow(shadow);
+                opt.target._shadow = opt.target.shadow;     // Save original shadow
+
+                if (opt.target.isType("group")) {
+                    opt.target.getObjects().forEach(function(c) { c.shadow = undefined; });
+                }
+
+                var shadow = new fabric.Shadow({
+                    color: "black",
+                    blur: 4,
+                    offsetX: 50,
+                    offsetY: 50,
+                });
+                opt.target.shadow = shadow;
+                BOARD.renderAll();
             }
 
             // Right click - Zoom piece
@@ -1009,8 +1015,9 @@ function configureBoardEvents() {
 
         // Left click - Drop piece
         if (opt.target && evt.which == 1) {
-            // opt.target.setShadow(shadow);
-            // opt.target._shadow = undefined;
+            opt.target.shadow = opt.target._shadow;
+            opt.target._shadow = undefined;
+            snapPathOrGroup(opt.target);
         }
 
         // Right click - Unzoom piece
@@ -1040,9 +1047,6 @@ function configureBoardEvents() {
         if (BOARD && evt.which == "3") {
             evt.preventDefault();
         }
-    });
-    BOARD.on('object:modified', function(opt) {
-        snapPathOrGroup(opt.target);
     });
     BOARD.on('mouse:over', function(opt) {
         BOARD.overTarget = opt.target;
@@ -1095,10 +1099,6 @@ function setZoomPosition(path, curValue) {
     }
     path.left = ((1-per) * path._zoomLeft) + (per * endX);
     path.top = ((1-per) * path._zoomTop) + (per * endY);
-
-    //TODO: scaleToHeight() - we could use this to cap the zoom to x% of board width and height instead of hardcoded 4x
-    //var boundingRectFactor = this.getBoundingRect(absolute).height / this.getScaledHeight();
-    //return this.scale(value / this.height / boundingRectFactor);
 }
 
 function centerOfPiece(path) {
