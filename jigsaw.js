@@ -1,7 +1,4 @@
 // Priority TODOs
-// * Look for new pick up and drop SFX that go well together. Add a click sound for menu choices. 
-// * Consider using shake.mp3 for the puzzle shuffle at the beginning. End the audio when the animation finishes.
-// * Go through all SFX and use Audacity to balance and lower volume
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
 // * Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
 // BUG: Try to track down group snapping to single piece alignment bug that ocassionally pops up.
@@ -10,6 +7,7 @@
 // * Hide disk space, import, and export buttons. replace with play buttons for image reference toggle, sound effects on/off, and future buttons
 // * Low: puzzle image for reference, sound effects + on/off toggle during play, buckets
 // * Implement import and export buttons (Export to zip, import from zip)
+// * Code cleanup - ES6 pass and split out sections to different files where possible. This file is getting too large.
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
 // * Add a Rename button 
 // * Create a help menu (describes controls; drag and drop and mouse/keys for when playing)
@@ -26,7 +24,7 @@
 // Tracks the active folder for the puzzle menu
 var ACTIVE_FID = "root";
 
-// Tracks the FabricJS canvas object used for rendering the play board
+// Tracks the singleton FabricJS canvas object used for rendering the play board
 var BOARD;
 
 // Tracks the singleton image cropper object used for creating new puzzles
@@ -97,6 +95,8 @@ function sortPuzzles([aK,aV],[bK,bV]) {
 }
 
 function menuItemClick(menuItem, event){
+    audio('click');
+
     // If in delete mode, toggle checked and disable dragging
     let checkbox = menuItem.querySelector(".menuItemDelete");
     if (checkbox.checkVisibility()) {
@@ -317,6 +317,8 @@ function deletePuzzlesCancel() {
 }
 
 function playOverlayDifficultyClick(difficulty) {
+    audio('click');
+
     let selected = difficulty.parentElement.querySelector(".playOverlayDifficultySelected");
     if (selected && difficulty != selected) {
         selected.classList.remove("playOverlayDifficultySelected");
@@ -338,6 +340,8 @@ function playOverlayOrientationInfoClick() {
 }
 
 function playOverlayOrientationSelectChange(orientationSelect) {
+    audio('click');
+
     let span = orientationSelect.parentElement.querySelector(".playOverlayOrientationSpan");
     if (orientationSelect.value != 0) {
         span.classList.remove("playOverlayHidden");
@@ -350,6 +354,8 @@ function playOverlayOrientationSelectChange(orientationSelect) {
 }
 
 function playOverlayPlayButtonClick(playButton) {
+    audio('click');
+
     // Capture the user's play selections
     let playOverlay = playButton.parentElement;
     const puzzleId = playOverlay.id.substring(1);
@@ -368,6 +374,7 @@ function playOverlayPlayButtonClick(playButton) {
 }
 
 function playOverlayCancelButtonClick(cancelButton) {
+    audio('click');
     hideOverlayCover();
     cancelButton.parentElement.remove();
 }
@@ -956,9 +963,7 @@ function configureBoardEvents() {
                 opt.target.shadow = shadow;
                 BOARD.renderAll();
 
-                // Play pick-up SFX
-                let audio = new Audio('assets/pickup.mp3');
-	            audio.play();
+                audio('up');
             }
 
             // Right click - Zoom piece
@@ -1021,9 +1026,7 @@ function configureBoardEvents() {
 
         // Left click - Drop piece
         if (opt.target && evt.which == 1) {
-            // Play drop SFX
-            let audio = new Audio('assets/drop.wav');
-            audio.play();
+            audio('down');
 
             opt.target.shadow = opt.target._shadow;
             opt.target._shadow = undefined;
@@ -1083,9 +1086,7 @@ function configureBoardEvents() {
                     snapPathOrGroup(path);
                 });
 
-                // Play rotate SFX
-                let audio = new Audio('assets/rotate.mp3');
-                audio.play();
+                audio('rotate');
             }
         }
 
@@ -1161,9 +1162,7 @@ function snapPathOrGroup(target) {
     }
 
     if (snapped) {
-        // Play snap SFX
-        let audio = new Audio('assets/snap.wav');
-        audio.play();
+        audio('snap');
     }
 }
 
@@ -1582,6 +1581,8 @@ function animatePath(path, prop, endPoint, duration, render, onBeforeFunc, onCha
 function shufflePieces() {
     let puzzle = BOARD.puzzle;
     let pieces = BOARD.pieces;
+
+    audio('shake');
 
     for (let r = 0; r < pieces.length; r++) {
         const cols = pieces[r].length;

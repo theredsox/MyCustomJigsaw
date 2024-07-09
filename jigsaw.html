@@ -6,6 +6,7 @@
    <title>My Custom Jigsaw Puzzles</title>
    <script type="text/javascript" src="localstorage.js"></script>
    <script type="text/javascript" src="filesystem.js"></script>
+   <script type="text/javascript" src="audio.js"></script>
    <script type="text/javascript" src="jigsaw.js"></script>
    <link rel="stylesheet" href="jigsaw.css">
    <script type="text/javascript" src="libs/croppr/croppr.js"></script>
@@ -13,7 +14,7 @@
    <script type="text/javascript" src="libs/fabric/fabric.js"></script>
 </head>
 
-<body onload="loadMainMenu()">
+<body onload="audioSetup();loadMainMenu()">
     <img class="title" src="assets/logo-my-custom-puzzles-2560x512.png" />
     <div class="body">
         <!-- Main Menu for creating puzzles, organizing, managing data -->
