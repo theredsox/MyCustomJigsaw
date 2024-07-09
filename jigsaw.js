@@ -1,13 +1,14 @@
 // Priority TODOs
-// * Puzzle piece CSS; Look into custom filter to warp the piece image around the edge
-// * Add sound effects for pick up, drop, and rotate
+// * Look for new pick up and drop SFX that go well together. Add a click sound for menu choices. 
+// * Consider using shake.mp3 for the puzzle shuffle at the beginning. End the audio when the animation finishes.
+// * Go through all SFX and use Audacity to balance and lower volume
 // * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
-//  - Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
+// * Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
 // BUG: Try to track down group snapping to single piece alignment bug that ocassionally pops up.
 // BUG: Rotate while left mouse held down causes location jump
 // * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
 // * Hide disk space, import, and export buttons. replace with play buttons for image reference toggle, sound effects on/off, and future buttons
-//  - Low: puzzle image for reference, sound effects + on/off toggle during play, buckets
+// * Low: puzzle image for reference, sound effects + on/off toggle during play, buckets
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
 // * Add a Rename button 
@@ -20,6 +21,7 @@
 // * Simplify/clean up CSS. Like display: individual none/inline's using .remove and .add instead
 // * Consider using inline HTML format to create objects instead of separate lines for each attribute.
 //       Or find ways to reduce attribute setting. Maybe remove IDs that are identical to class name and look up object by class
+// * Puzzle piece CSS; Look into custom filter to warp the piece image around the edge
 
 // Tracks the active folder for the puzzle menu
 var ACTIVE_FID = "root";
@@ -953,6 +955,10 @@ function configureBoardEvents() {
                 });
                 opt.target.shadow = shadow;
                 BOARD.renderAll();
+
+                // Play pick-up SFX
+                let audio = new Audio('assets/pickup.mp3');
+	            audio.play();
             }
 
             // Right click - Zoom piece
@@ -1015,6 +1021,10 @@ function configureBoardEvents() {
 
         // Left click - Drop piece
         if (opt.target && evt.which == 1) {
+            // Play drop SFX
+            let audio = new Audio('assets/drop.wav');
+            audio.play();
+
             opt.target.shadow = opt.target._shadow;
             opt.target._shadow = undefined;
             snapPathOrGroup(opt.target);
@@ -1072,6 +1082,10 @@ function configureBoardEvents() {
                     path.rotationInProgress = false;
                     snapPathOrGroup(path);
                 });
+
+                // Play rotate SFX
+                let audio = new Audio('assets/rotate.mp3');
+                audio.play();
             }
         }
 
@@ -1136,13 +1150,20 @@ function getPathPoint(path, pos) {
 
 function snapPathOrGroup(target) {
     target.setCoords();
-        
+    
+    let snapped = false;
     if (target.isType("path")) {
-        snapPiece(target);
+        snapped = snapPiece(target);
     } else if (target.isType("group")) {
         for (let obj of target.getObjects()) {
-            snapPiece(obj);
+            snapped |= snapPiece(obj);
         }
+    }
+
+    if (snapped) {
+        // Play snap SFX
+        let audio = new Audio('assets/snap.wav');
+        audio.play();
     }
 }
 
@@ -1153,30 +1174,32 @@ function snapPiece(path) {
     if (aPiece.row > 0) {
         let above = BOARD.pieces[aPiece.row - 1][aPiece.col];
         if (snap(path, above.object, "t")) {
-            return;
+            return true;
         }
     }
     // Below
     if (aPiece.row < BOARD.pieces.length - 1) {
         let below = BOARD.pieces[aPiece.row + 1][aPiece.col];
         if (snap(path, below.object, "b")) {
-            return;
+            return true;
         }
     }
     // Left
     if (aPiece.col > 0) {
         let left = BOARD.pieces[aPiece.row][aPiece.col - 1];
         if (snap(path, left.object, "l")) {
-            return;
+            return true;
         }
     }
     // Right
     if (aPiece.col < BOARD.pieces[0].length - 1) {
         let right = BOARD.pieces[aPiece.row][aPiece.col + 1];
         if (snap(path, right.object, "r")) {
-            return;
+            return true;
         }
     }
+
+    return false;
 }
 
 function getPathAngle(a) {
