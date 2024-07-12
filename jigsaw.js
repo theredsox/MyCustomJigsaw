@@ -1,11 +1,8 @@
 // Priority TODOs
-// * Change piece Path edge size based on Path resolution, low res puzzles with lots of pieces need thinner border
 // * Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
-// BUG: Try to track down group snapping to single piece alignment bug that ocassionally pops up.
 // BUG: Rotate while left mouse held down causes location jump
 // * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
-// * Hide disk space, import, and export buttons. replace with play buttons for image reference toggle, sound effects on/off, and future buttons
-// * Low: puzzle image for reference, sound effects + on/off toggle during play, buckets
+// * Low: puzzle image for reference, sound effects + on/off toggle during play, toggle on-board puzzle image, buckets, back to menu option
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Code cleanup - ES6 pass and split out sections to different files where possible. This file is getting too large.
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
@@ -366,9 +363,9 @@ function playOverlayPlayButtonClick(playButton) {
     playOverlay.remove();
 
     // Transition to the create puzzle page
-    displayPage("page1", false);
+    displayPage("page1", false, false);
     setTimeout(function(){
-        displayPage("page2", true);
+        displayPage("page2", true, false);
         startPuzzle(puzzleId, difficulty, orientation);
     }, 600);
 }
@@ -760,13 +757,30 @@ function formatTitle(title) {
 
 // @param id - string - DOM id
 // @param show - boolean
-function displayPage(id, show) {
+function displayPage(id, show, showHeader) {
     var page = document.getElementById(id);
     if (show) {
         page.style.display = "";
     }
     page.classList.remove(show ? "hidden" : "visible");
     page.classList.add(show ? "visible" : "hidden");
+
+    // Header objects
+    let title = document.getElementById("title");
+    let diskSpace = document.getElementById("diskSpace");
+    let exp = document.getElementById("export");
+    let imp = document.getElementById("import");
+    if (showHeader) {
+        title.classList.remove("remove");
+        diskSpace.classList.remove("remove");
+        exp.classList.remove("remove");
+        imp.classList.remove("remove");
+    } else {
+        title.classList.add("remove");
+        diskSpace.classList.add("remove");
+        exp.classList.add("remove");
+        imp.classList.add("remove");
+    }
 
     // Wait 550ms for the CSS transition to complete, then run cleanup
     if (!show) {
@@ -957,8 +971,8 @@ function configureBoardEvents() {
                 var shadow = new fabric.Shadow({
                     color: "black",
                     blur: 4,
-                    offsetX: 50,
-                    offsetY: 50,
+                    offsetX: BOARD._shadowUp,
+                    offsetY: BOARD._shadowUp,
                 });
                 opt.target.shadow = shadow;
                 BOARD.renderAll();
@@ -1417,8 +1431,8 @@ function setGroupShadow(group) {
     var shadow = new fabric.Shadow({
         color: "black",
         blur: 3,
-        offsetX: 8,
-        offsetY: 8,
+        offsetX: BOARD._shadow,
+        offsetY: BOARD._shadow,
     });
     group.shadow = shadow;
 }
@@ -1464,7 +1478,7 @@ async function startPuzzle(id, difficulty, orientation) {
         BOARD.puzzle = puzzle;
         BOARD.pieces = pieces;
         BOARD.setWidth(window.innerWidth - 20);
-        BOARD.setHeight(window.innerHeight - 80);
+        BOARD.setHeight(window.innerHeight - 20);
         BOARD.panWidth = puzzle.width * 3;
         BOARD.panHeight = puzzle.height * 3;
         BOARD.snap = (generator.width / generator.xn) * .25; // X and Y equal due to supported aspect ratios
@@ -1472,11 +1486,27 @@ async function startPuzzle(id, difficulty, orientation) {
         BOARD.selection = false;
         BOARD.altSelectionKey = "ctrlKey";
 
-        // TODO: Temp border for testing pan restriction movement, remove it
-        var bg = new fabric.Rect({ width: BOARD.panWidth, height: BOARD.panHeight, stroke: 'pink', strokeWidth: 10, fill: '', evented: false, selectable: false });
-        bg.fill = new fabric.Pattern(
-            { source: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAASElEQVQ4y2NkYGD4z0A6+M3AwMBKrGJWBgYGZiibEQ0zIInDaCaoelYyHYcX/GeitomjBo4aOGrgQBj4b7RwGFwGsjAwMDAAAD2/BjgezgsZAAAAAElFTkSuQmCC' },
-            function() { bg.dirty = true; BOARD.requestRenderAll() });
+        let mp = (puzzle.width * puzzle.height) / 1000000;
+        let stroke = mp <= 2.25 ? 1 : (mp <= 8 ? 2 : 3);
+
+        let avg = ((puzzle.width / generator.xn) + (puzzle.height / generator.yn)) / 2;
+        BOARD._shadow = avg * .02;
+        BOARD._shadowUp = avg * .1;
+
+        // Set the image as the background
+        let pattern = new fabric.Pattern({
+            source: img,
+            repeat: "no-repeat"
+        });
+        var bg = new fabric.Rect({ 
+            width: puzzle.width, 
+            height: puzzle.height, 
+            stroke: 'black', 
+            strokeWidth: 2, 
+            fill: pattern, 
+            opacity: 0.40,
+            evented: false, 
+            selectable: false });
         bg.canvas = BOARD;
         BOARD.backgroundImage = bg;
 
@@ -1495,7 +1525,7 @@ async function startPuzzle(id, difficulty, orientation) {
                 path.stroke = "black";
                 // TODO: Knock down the width for smaller resolution photos that choose a lot of pieces.
                 // So maybe based on Path size?
-                path.strokeWidth = 3;
+                path.strokeWidth = stroke;
                 path.lockRotation = true;
                 path.lockScalingX = true;
                 path.lockScalingY = true;
@@ -1518,8 +1548,8 @@ async function startPuzzle(id, difficulty, orientation) {
                 var shadow = new fabric.Shadow({
                     color: "black",
                     blur: 3,
-                    offsetX: 8,
-                    offsetY: 8,
+                    offsetX: BOARD._shadow,
+                    offsetY: BOARD._shadow,
                 });
                 path.shadow = shadow;
 
