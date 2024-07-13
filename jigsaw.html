@@ -30,6 +30,7 @@
         </div>
         <!-- Play Board for solving puzzles -->
         <div id="page2" class="page hidden">
+            <div id="boxCover" class="boxCover" onclick="boxCoverClick()"></div>
             <canvas id="board" class="board"></canvas>
         </div>
     </div>
@@ -113,7 +114,7 @@
             <span class="playOverlayOrientationSpan playOverlayHidden">  * [Alt] key to rotate</span>
         </div>
         <button id="playButtonClone" class="playOverlayButton playOverlayHidden hidden" disabled=true onclick="playOverlayPlayButtonClick(this)">Play now</button>
-        <button id="cancelButtonClone" class="playOverlayHidden hidden" onclick="playOverlayCancelButtonClick(this)">Cancel</button>
+        <button id="cancelButtonClone" class="playOverlayHidden hidden" onclick="playOverlayCancelButtonClick()">Cancel</button>
     </div>
 </body>
 

@@ -2,7 +2,7 @@
 // * Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
 // BUG: Rotate while left mouse held down causes location jump
 // * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
-// * Low: puzzle image for reference, sound effects + on/off toggle during play, toggle on-board puzzle image, buckets, back to menu option
+// * Low: toggle sound, toggle on-board puzzle image, buckets, back to menu option
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Code cleanup - ES6 pass and split out sections to different files where possible. This file is getting too large.
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
@@ -48,7 +48,11 @@ window.onresize = function() {
 
     if (BOARD) {
         BOARD.setWidth(window.innerWidth - 20);
-        BOARD.setHeight(window.innerHeight - 80);
+        BOARD.setHeight(window.innerHeight - 20);
+
+        if (isOverlayCover()) {
+            document.getElementById("overlayCover").click();
+        }
     }
 }
 
@@ -234,7 +238,7 @@ function closeFolderOverlay() {
 
 function createFolder() {
     // Show overlays
-    showOverlayCover();
+    showOverlayCover(closeFolderOverlay);
     document.getElementById("createFolderOverlay").classList.remove("remove");
 
     // Change focus to the name input
@@ -370,10 +374,10 @@ function playOverlayPlayButtonClick(playButton) {
     }, 600);
 }
 
-function playOverlayCancelButtonClick(cancelButton) {
+function playOverlayCancelButtonClick() {
     audio('click');
     hideOverlayCover();
-    cancelButton.parentElement.remove();
+    document.getElementById("cancelPlayButton").parentElement.remove();
 }
 
 function loadPlayOverlay(menuItem, event) {
@@ -425,7 +429,7 @@ function loadPlayOverlay(menuItem, event) {
 
     // Cancel button to exit folder creation
     var cancelButton = document.getElementById("cancelButtonClone").cloneNode(true);
-    cancelButton.id = "cancelButton";
+    cancelButton.id = "cancelPlayButton";
     playOverlay.appendChild(cancelButton);
 
     // Render the play overlay
@@ -434,7 +438,7 @@ function loadPlayOverlay(menuItem, event) {
     // Transition to the centered play overlay. Must be delayed for playOverlay to be drawn on screen or animations won't trigger.
     setTimeout(function() {
         // Bring up the overlay cover
-        showOverlayCover();
+        showOverlayCover(playOverlayCancelButtonClick);
         
         // Apply the CSS class to trigger the transition position from menu item to play overlay
         playOverlay.classList.add("playOverlayTransition");
@@ -487,7 +491,7 @@ function createPuzzle() {
             }
 
             // Show the overlays
-            showOverlayCover();
+            showOverlayCover(closePuzzleOverlay);
             document.getElementById("createPuzzleOverlay").classList.remove("remove");
 
             // Change focus to the name input
@@ -856,12 +860,23 @@ function closeInfoOverlay() {
     document.getElementById("infoOverlay").classList.add("remove");
 }
 
-function showOverlayCover() {
-    document.getElementById("overlayCover").classList.remove("remove");
+function showOverlayCover(onclickFunc) {
+    let cover = document.getElementById("overlayCover");
+    cover.classList.remove("remove");
+    if (onclickFunc) {
+        cover.onclick = onclickFunc;
+    }
+
 }
 
 function hideOverlayCover() {
-    document.getElementById("overlayCover").classList.add("remove");
+    let cover = document.getElementById("overlayCover");
+    cover.classList.add("remove");
+    cover.onclick = null;
+}
+
+function isOverlayCover() {
+    return !document.getElementById("overlayCover").classList.contains("remove");
 }
 
 function getRandomColor() {
@@ -1474,11 +1489,11 @@ async function startPuzzle(id, difficulty, orientation) {
             fireRightClick: true,
             fireMiddleClick: true,
             stopContextMenu: true,
+            width: window.innerWidth - 20,
+            height: window.innerHeight - 20,
         });
         BOARD.puzzle = puzzle;
         BOARD.pieces = pieces;
-        BOARD.setWidth(window.innerWidth - 20);
-        BOARD.setHeight(window.innerHeight - 20);
         BOARD.panWidth = puzzle.width * 3;
         BOARD.panHeight = puzzle.height * 3;
         BOARD.snap = (generator.width / generator.xn) * .25; // X and Y equal due to supported aspect ratios
@@ -1486,9 +1501,11 @@ async function startPuzzle(id, difficulty, orientation) {
         BOARD.selection = false;
         BOARD.altSelectionKey = "ctrlKey";
 
+        // Set piece stroke border relative to image resolution
         let mp = (puzzle.width * puzzle.height) / 1000000;
         let stroke = mp <= 2.25 ? 1 : (mp <= 8 ? 2 : 3);
 
+        // Set piece stadows relative to image resolution
         let avg = ((puzzle.width / generator.xn) + (puzzle.height / generator.yn)) / 2;
         BOARD._shadow = avg * .02;
         BOARD._shadowUp = avg * .1;
@@ -1569,11 +1586,29 @@ async function startPuzzle(id, difficulty, orientation) {
             }
         }
 
-        // Show the drawn puzzle for 3 seconds and then shuffle to start the game
+        // Set initial pan position
+        let br = pieces[generator.yn-1][generator.xn-1].object.oCoords.br;
+        var vpt = BOARD.viewportTransform;
+        vpt[4] += (BOARD.width / 2) - (br.x / 2);
+        vpt[5] += (BOARD.height / 2) - (br.y / 2);
+
+        // Set up the puzzle "box cover" image for user reference
+        let boxCover = document.getElementById("boxCover");
+        boxCover.style.aspectRatio = puzzle.aspectRatio[0] + "/" + puzzle.aspectRatio[1];
+        boxCover.style.backgroundImage = "url('" + URL.createObjectURL(png) + "')";
+        if (puzzle.width > puzzle.height) {
+            boxCover.style.width = "200px";
+            boxCover.style.height = (200 * (puzzle.aspectRatio[1] / puzzle.aspectRatio[0])) + "px";
+        } else {
+            boxCover.style.width = (200 * (puzzle.aspectRatio[0] / puzzle.aspectRatio[1])) + "px";
+            boxCover.style.height = "200px";
+        }
+
+        // Show the drawn puzzle for 2 seconds and then shuffle to start the game
         setTimeout(function() {
             configureBoardEvents();
             //shufflePieces();
-        }, 3000);
+        }, 2000);
     };
 }
 
@@ -1623,8 +1658,10 @@ function shufflePieces() {
 
             // Randomize piece placement across visible board space, margin of 100px
             const buf = 300;
-            const top = Math.floor(Math.random() * ((2 * puzzle.height) - (2 * buf)) + buf);
-            const left = Math.floor(Math.random() * ((2 * puzzle.width) - (2 * buf)) + buf);
+            const height = ((2 * puzzle.height) - (2 * buf)) + buf;
+            const width = ((2 * puzzle.width) - (2 * buf)) + buf;
+            const top = Math.floor(Math.random() * height) - (height / 4);
+            const left = Math.floor(Math.random() * width) - (width / 4);
             animatePath(path, 'top', top, 2000, render);
             animatePath(path, 'left', left, 2000, render);
             if (BOARD.orientation > 0) {
@@ -1639,6 +1676,62 @@ function shufflePieces() {
                 });
             }
         }
+    }
+}
+
+function boxCoverClick() {
+    var boxCover = document.getElementById("boxCover");
+    
+    // If in preview mode, show max size. Else show preview.
+    if (!boxCover._height) {
+        showOverlayCover(boxCoverClick);
+        
+        // Remember the preview size and wipe out dimensions set, will be reset using CSS class
+        boxCover._height = boxCover.style.height;
+        boxCover._width = boxCover.style.width;
+        
+        // If puzzle is wider, set to width. Else height
+        let width, height;
+        let boardAspect = BOARD.width / BOARD.height;
+        let puzzleAspect = BOARD.puzzle.width / BOARD.puzzle.height;
+        if (puzzleAspect > boardAspect) {
+            width = window.innerWidth - 20 + 1;
+            height = width * BOARD.puzzle.aspectRatio[1] / BOARD.puzzle.aspectRatio[0];
+        } else {
+            height = window.innerHeight - 20 + 1;
+            width = height * BOARD.puzzle.aspectRatio[0] / BOARD.puzzle.aspectRatio[1];
+        }
+
+        boxCover._animate = boxCover.animate(
+            [
+                {   
+                    height: boxCover.style.height,
+                    width: boxCover.style.width,
+                    transform: "translate(0%, 0%)",
+                    right: "1px",
+                    top: "0px",
+                    border: "2px solid #0460b1",
+                },
+                { 
+                    height: height + "px", 
+                    width: width + "px",
+                    transform: "translate(50%, -50%)",
+                    right: "calc(50% - 1px)",
+                    top: "calc(50% + 2px)",
+                    border: "0px"
+                },
+            ],
+            {
+                duration: 500,
+                fill: 'forwards'
+            }
+        );
+    } else {
+        boxCover._animate.reverse();
+        setTimeout(hideOverlayCover, 500);
+        boxCover._animate = undefined;
+        boxCover._height = undefined;
+        boxCover._width = undefined;
     }
 }
 

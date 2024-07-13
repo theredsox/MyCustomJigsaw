@@ -582,4 +582,21 @@ ul {
 
 .board {
     border: 2px solid #0460b1;
+    width: 1px;
+}
+
+.boxCover {
+    animation-fill-mode: forwards;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    border: 2px solid #0460b1;
+    height: initial;
+    float: right;
+    position: absolute;
+    right: 1px;
+    top: 0px;
+    transform: translate(0%, 0%);
+    width: initial;
+    z-index: 100;
 }
