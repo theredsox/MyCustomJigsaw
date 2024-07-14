@@ -1,5 +1,5 @@
 // Priority TODOs
-// * Medium: more controls: right click = zoom on piece, ctrl+left click = multi-select pieces, shift+left click + drag = multi-select, left click board drag over pan area
+// * Medium: more controls: ctrl+left click = multi-select pieces
 // BUG: Rotate while left mouse held down causes location jump
 // * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
 // * Low: toggle sound, toggle on-board puzzle image, buckets, back to menu option
@@ -963,7 +963,7 @@ function configureBoardEvents() {
 
         // If there is no target
         if (!opt.target) {
-            if (opt.shiftKey) {
+            if (evt.shiftKey) {
                 // Start multi-select area
                 this.selection = true;
             } else {
@@ -1051,7 +1051,7 @@ function configureBoardEvents() {
         // On mouse up recalculate new interaction for all objects, so call setViewportTransform
         this.setViewportTransform(this.viewportTransform);
         this.isDragging = false;
-        this.selection = false;
+        this.selection = true;
 
         // Left click - Drop piece
         if (opt.target && evt.which == 1) {
@@ -1096,7 +1096,41 @@ function configureBoardEvents() {
     BOARD.on('mouse:out', function(opt) {
         BOARD.overTarget = undefined;
     });
-    
+    BOARD.on('selection:created', function(opt) {
+        if (opt.selected.length > 1) {
+            var group = BOARD.getActiveObject();
+            group.hasBorders = false;
+            group.hasControls = false;
+            group.lockRotation = true;
+            group.lockScalingX = true;
+            group.lockScalingY = true;
+            group.perPixelTargetFind = true;
+
+            for (let obj of group.getObjects()) {
+                let pieces = (obj.isType('path') ? [obj] : obj.getObjects());
+                for (let piece of pieces) {
+                    piece._stroke = piece.stroke;
+                    piece._strokeWidth = piece.strokeWidth;
+                    piece.set('stroke', '#0460b1');
+                    piece.set('strokeWidth', parseInt(piece._strokeWidth) * 5);
+                }
+            }
+        }
+    });
+    BOARD.on('before:selection:cleared', function(opt) {
+        if (opt.target.type == 'activeSelection') {
+            for (let obj of opt.target.getObjects()) {
+                let pieces = (obj.isType('path') ? [obj] : obj.getObjects());
+                for (let piece of pieces) {
+                    piece.stroke = piece._stroke;
+                    piece.strokeWidth = piece._strokeWidth;
+                    piece._stroke = undefined;
+                    piece._strokeWidth = undefined;
+                }
+            }
+        }
+    });
+
     window.addEventListener("keydown", function(e) {
         // Rotate piece
         if (BOARD.orientation > 0 && e.key == "Alt" && BOARD.overTarget) {
@@ -1119,6 +1153,9 @@ function configureBoardEvents() {
             }
         }
 
+        // Enable multi-select when shift key is pressed
+        this.selection = e.key == "Shift" && !BOARD.overTarget;
+        
         // Disable certain browser key shortcuts during active puzzle play.
         if (BOARD && e.key == "Alt") {
             e.preventDefault();
@@ -1499,7 +1536,7 @@ async function startPuzzle(id, difficulty, orientation) {
         BOARD.snap = (generator.width / generator.xn) * .25; // X and Y equal due to supported aspect ratios
         BOARD.orientation = orientation;
         BOARD.selection = false;
-        BOARD.altSelectionKey = "ctrlKey";
+        //BOARD.altSelectionKey = "ctrlKey";
 
         // Set piece stroke border relative to image resolution
         let mp = (puzzle.width * puzzle.height) / 1000000;
