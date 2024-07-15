@@ -1,8 +1,7 @@
 // Priority TODOs
-// * Medium: more controls: ctrl+left click = multi-select pieces
 // BUG: Rotate while left mouse held down causes location jump
 // * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
-// * Low: toggle sound, toggle on-board puzzle image, buckets, back to menu option
+// * Low: toggle sound, toggle on-board puzzle image, buckets, back to menu option (make sure to avoid multiple event listeners on BOARD)
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Code cleanup - ES6 pass and split out sections to different files where possible. This file is getting too large.
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
@@ -960,12 +959,15 @@ function configureBoardEvents() {
     });
     BOARD.on('mouse:down', function(opt) {
         var evt = opt.e;
-
+        var target = opt.target
         // If there is no target
-        if (!opt.target) {
+        if (!target) {
             if (evt.shiftKey) {
                 // Start multi-select area
                 this.selection = true;
+
+                // Drop any multi-select click (CTRL) selected pieces
+                ctrlSelectionDrop();
             } else {
                 // Drag the board
                 this.isDragging = true;
@@ -973,46 +975,72 @@ function configureBoardEvents() {
                 this.lastPosX = evt.clientX;
                 this.lastPosY = evt.clientY;
             }
-        } else if (opt.target) {
-            // Left click - Pick up piece
+        } else if (target) {
+            // Left click
             if (evt.which == 1) {
-                // Initiate a shadow object
-                opt.target._shadow = opt.target.shadow;     // Save original shadow
+                // Piece pickup if CTRL not pressed and target isn't a multi-select click (CTRL) piece
+                if (!BOARD.ctrlSelection && !BOARD.ctrlSelectionObjects.includes(target)) {
+                    // Drop any multi-select click (CTRL) selected pieces
+                    ctrlSelectionDrop();
 
-                if (opt.target.isType("group")) {
-                    opt.target.getObjects().forEach(function(c) { c.shadow = undefined; });
+                    target._shadow = target.shadow;     // Save original shadow
+
+                    if (target.isType("group")) {
+                        target.getObjects().forEach(function(c) { c.shadow = undefined; });
+                    }
+
+                    var shadow = new fabric.Shadow({
+                        color: "black",
+                        blur: 4,
+                        offsetX: BOARD._shadowUp,
+                        offsetY: BOARD._shadowUp,
+                    });
+                    target.shadow = shadow;
+                    BOARD.renderAll();
+
+                    audio('up');
+                } else if (BOARD.ctrlSelection) {
+                    // Add the target if not already included
+                    if (!BOARD.ctrlSelectionObjects.includes(target)) {
+                        target.newlySelected = true;
+                        BOARD.ctrlSelectionObjects.push(target);
+
+                        // Select the piece/group
+                        let pieces = (target.isType('path') ? [target] : target.getObjects());
+                        for (let piece of pieces) {
+                            piece._stroke = piece.stroke;
+                            piece._strokeWidth = piece.strokeWidth;
+                            piece.set('stroke', '#0460b1');
+                            piece.set('strokeWidth', parseInt(piece._strokeWidth) * 5);
+                        }
+
+                        audio('up');
+                    }
+                    BOARD.ctrlSelectionDrag = true;
+                } else if (BOARD.ctrlSelectionObjects.length > 0) {
+                    // New pieces can only be selected when CTRL is down, but when pieces are currently selected dragging can occur
+                    BOARD.ctrlSelectionDrag = true;
                 }
-
-                var shadow = new fabric.Shadow({
-                    color: "black",
-                    blur: 4,
-                    offsetX: BOARD._shadowUp,
-                    offsetY: BOARD._shadowUp,
-                });
-                opt.target.shadow = shadow;
-                BOARD.renderAll();
-
-                audio('up');
             }
 
             // Right click - Zoom piece
             if (evt.which == 3 && !BOARD._zoomTarget) {
                 // Save the zoom target so it can unzoom even if not the target when right click is released
-                BOARD._zoomTarget = opt.target;
+                BOARD._zoomTarget = target;
 
                 // Assure it'll be the front object for viewing
-                opt.target.bringToFront();
+                target.bringToFront();
 
                 // Determine the scale which will allow the object to zoom to 80% of the board size
                 if (BOARD.width > BOARD.height) {
-                    var boundingRectFactor = opt.target.getBoundingRect(false).height / opt.target.getScaledHeight();
-                    opt.target._maxScale = (BOARD.height * .8) / opt.target.height / boundingRectFactor;
+                    var boundingRectFactor = target.getBoundingRect(false).height / target.getScaledHeight();
+                    target._maxScale = (BOARD.height * .8) / target.height / boundingRectFactor;
                 } else {
-                    var boundingRectFactor = opt.target.getBoundingRect(false).width / opt.target.getScaledWidth();
-                    opt.target._maxScale = (BOARD.width * .8) / opt.target.width / boundingRectFactor;
+                    var boundingRectFactor = target.getBoundingRect(false).width / target.getScaledWidth();
+                    target._maxScale = (BOARD.width * .8) / target.width / boundingRectFactor;
                 }
 
-                animatePath(opt.target, 'scaleX', opt.target._maxScale, 500, true, function(path) {
+                animatePath(target, 'scaleX', target._maxScale, 500, true, function(path) {
                     // Remember the original values for unzoom
                     path._zoomScale = path.scaleX;
                     path._zoomLeft = path.left;
@@ -1032,34 +1060,85 @@ function configureBoardEvents() {
         }
     });
     BOARD.on('mouse:move', function(opt) {
+        var e = opt.e;
+        let target = opt.target;
+
         if (this.isDragging) {
-            var e = opt.e;
             var vpt = this.viewportTransform;
             vpt[4] += e.clientX - this.lastPosX;
             vpt[5] += e.clientY - this.lastPosY;
-            
-            respectBoardPanBoundaries(e);            
-            
+           
+            respectBoardPanBoundaries(e);
+
             this.requestRenderAll();
             this.lastPosX = e.clientX;
             this.lastPosY = e.clientY;
+        } else if (BOARD.ctrlSelectionDrag && target && BOARD.ctrlSelectionObjects.includes(target)) {
+            // If in a multi-select click (CTRL), move all selected objects
+            if (target.lastPosX && target.lastPosY) {
+                let xDiff = target.left - target.lastPosX;
+                let yDiff = target.top - target.lastPosY;
+                
+                for (let obj of BOARD.ctrlSelectionObjects) {
+                    if (obj != target) {
+                        obj.left += xDiff;
+                        obj.top += yDiff;
+                    }
+                }
+                BOARD.renderAll();
+            }
+            target.lastPosX = target.left;
+            target.lastPosY = target.top;
         }
     });
     BOARD.on('mouse:up', function(opt) {
         var evt = opt.e;
+        let target = opt.target;
 
         // On mouse up recalculate new interaction for all objects, so call setViewportTransform
         this.setViewportTransform(this.viewportTransform);
         this.isDragging = false;
         this.selection = true;
 
-        // Left click - Drop piece
-        if (opt.target && evt.which == 1) {
-            audio('down');
+        // Left click
+        if (evt.which == 1) {
+            if (target) {
+                // If in a single piece pickup, drop it.
+                if (!BOARD.ctrlSelection && !BOARD.ctrlSelectionObjects.includes(target)) {
+                    audio('down');
+                    target.shadow = target._shadow;
+                    target._shadow = undefined;
+                    snapPathOrGroup(target);
+                } else if (!BOARD.ctrlSelection && BOARD.ctrlSelectionObjects.includes(target) && !target.lastPosX && !target.lastPosX) {
+                    // If clicking the board and no drag was performed, drop any multi-select click (CTRL) selected pieces
+                    ctrlSelectionDrop();
+                } else {
+                    // If the target wasn't added in this click and not being moved, assume it is being unselected
+                    if (BOARD.ctrlSelection && !target.newlySelected && !target.lastPosX && !target.lastPosX) {
+                        const index = BOARD.ctrlSelectionObjects.indexOf(target);
+                        if (index > -1) {
+                            audio('down');
+                            BOARD.ctrlSelectionObjects.splice(index, 1);
 
-            opt.target.shadow = opt.target._shadow;
-            opt.target._shadow = undefined;
-            snapPathOrGroup(opt.target);
+                            // Deselect the piece/group
+                            let pieces = (target.isType('path') ? [target] : target.getObjects());
+                            for (let piece of pieces) {
+                                piece.set('stroke', piece._stroke);
+                                piece.set('strokeWidth', piece._strokeWidth);
+                                piece._stroke = undefined;
+                                piece._strokeWidth = undefined;
+                            }
+                        }
+                    }
+                    target.newlySelected = false;
+                    target.lastPosX = undefined;
+                    target.lastPosY = undefined;
+                    BOARD.ctrlSelectionDrag = false;
+                }
+            } else if (BOARD.lastPosX == evt.clientX && BOARD.lastPosY == evt.clientY) {
+                // If clicking the board and no drag was performed, drop any multi-select click (CTRL) selected pieces
+                ctrlSelectionDrop();
+            }
         }
 
         // Right click - Unzoom piece
@@ -1122,8 +1201,8 @@ function configureBoardEvents() {
             for (let obj of opt.target.getObjects()) {
                 let pieces = (obj.isType('path') ? [obj] : obj.getObjects());
                 for (let piece of pieces) {
-                    piece.stroke = piece._stroke;
-                    piece.strokeWidth = piece._strokeWidth;
+                    piece.set('stroke', piece._stroke);
+                    piece.set('strokeWidth', piece._strokeWidth);
                     piece._stroke = undefined;
                     piece._strokeWidth = undefined;
                 }
@@ -1153,14 +1232,43 @@ function configureBoardEvents() {
             }
         }
 
-        // Enable multi-select when shift key is pressed
-        this.selection = e.key == "Shift" && !BOARD.overTarget;
+        // Enable multi-select drag when shift key is pressed
+        BOARD.selection = e.key == "Shift" && !BOARD.overTarget;
         
+        // Enable multi-select click when CTRL key is pressed
+        BOARD.ctrlSelection = e.key == "Control";
+
         // Disable certain browser key shortcuts during active puzzle play.
         if (BOARD && e.key == "Alt") {
             e.preventDefault();
         }
     });
+    window.addEventListener("keyup", function(e) {
+        if (e.key == "Control") {
+            BOARD.ctrlSelection = false;
+        }
+    });
+}
+
+function ctrlSelectionDrop() {
+    if (BOARD.ctrlSelectionObjects.length > 0) {
+        // Drop the selected pieces
+        audio('down');
+        for (let obj of BOARD.ctrlSelectionObjects) {
+            let pieces = (obj.isType('path') ? [obj] : obj.getObjects());
+            for (let piece of pieces) {
+                piece.set('stroke', piece._stroke);
+                piece.set('strokeWidth', piece._strokeWidth);
+                piece._stroke = undefined;
+                piece._strokeWidth = undefined;
+            }
+            //snapPathOrGroup(obj);  // TODO: Should we do this like we do for single drop? Could trigger multiple snap sounds
+        }
+        BOARD.renderAll();
+    }
+
+    BOARD.ctrlSelection = false;
+    BOARD.ctrlSelectionObjects = [];
 }
 
 function setZoomPosition(path, curValue) {
@@ -1496,7 +1604,7 @@ function getMinimumPoint(a, b) {
     let minX = Math.min(aC.tl.x, aC.tr.x, aC.br.x, aC.bl.x, bC.tl.x, bC.tr.x, bC.br.x, bC.bl.x);
     let minY = Math.min(aC.tl.y, aC.tr.y, aC.br.y, aC.bl.y, bC.tl.y, bC.tr.y, bC.br.y, bC.bl.y);
 
-    console.log("min[" + minX + "," + minY + "]");
+    //console.log("min[" + minX + "," + minY + "]");
 
     return [minX, minY];
 }
@@ -1537,6 +1645,9 @@ async function startPuzzle(id, difficulty, orientation) {
         BOARD.orientation = orientation;
         BOARD.selection = false;
         //BOARD.altSelectionKey = "ctrlKey";
+        BOARD.ctrlSelection = false;
+        BOARD.ctrlSelectionDrag = false;
+        BOARD.ctrlSelectionObjects = [];
 
         // Set piece stroke border relative to image resolution
         let mp = (puzzle.width * puzzle.height) / 1000000;
