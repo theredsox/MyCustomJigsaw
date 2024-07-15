@@ -1,7 +1,8 @@
 // Priority TODOs
+// * CTRL should move all the pieces onto the first selected piece. There's no practical use to keeping them relatively spaced.
 // BUG: Rotate while left mouse held down causes location jump
 // * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
-// * Low: toggle sound, toggle on-board puzzle image, buckets, back to menu option (make sure to avoid multiple event listeners on BOARD)
+// * Low: toggle sound, toggle on-board puzzle image, back to menu option (make sure to avoid multiple event listeners on BOARD)
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Code cleanup - ES6 pass and split out sections to different files where possible. This file is getting too large.
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
@@ -16,6 +17,7 @@
 // * Consider using inline HTML format to create objects instead of separate lines for each attribute.
 //       Or find ways to reduce attribute setting. Maybe remove IDs that are identical to class name and look up object by class
 // * Puzzle piece CSS; Look into custom filter to warp the piece image around the edge
+// * Puzzle buckets to sort pieces into. Common with doing physical puzzles, but have limited necessity in digital due to ease of stacking pieces vertically
 
 // Tracks the active folder for the puzzle menu
 var ACTIVE_FID = "root";
