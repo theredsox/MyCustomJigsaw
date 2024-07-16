@@ -1,5 +1,4 @@
 // Priority TODOs
-// * CTRL should move all the pieces onto the first selected piece. There's no practical use to keeping them relatively spaced.
 // BUG: Rotate while left mouse held down causes location jump
 // * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
 // * Low: toggle sound, toggle on-board puzzle image, back to menu option (make sure to avoid multiple event listeners on BOARD)
@@ -1075,7 +1074,7 @@ function configureBoardEvents() {
             this.requestRenderAll();
             this.lastPosX = e.clientX;
             this.lastPosY = e.clientY;
-        } else if (BOARD.ctrlSelectionDrag && target && BOARD.ctrlSelectionObjects.includes(target)) {
+        } else if (BOARD.ctrlSelectionDrag && target && BOARD.ctrlSelectionObjects.includes(target) && !target.newlySelected) {
             // If in a multi-select click (CTRL), move all selected objects
             if (target.lastPosX && target.lastPosY) {
                 let xDiff = target.left - target.lastPosX;
@@ -1132,6 +1131,17 @@ function configureBoardEvents() {
                             }
                         }
                     }
+
+                    if (BOARD.ctrlSelection && target.newlySelected) {
+                        // Move the piece to where the first piece is and bring it to the top
+                        if (BOARD.ctrlSelectionObjects[0] != target) {
+                            target.left = BOARD.ctrlSelectionObjects[0].left;
+                            target.top = BOARD.ctrlSelectionObjects[0].top;
+                            target.setCoords();
+                            target.bringToFront();
+                        }
+                    }
+
                     target.newlySelected = false;
                     target.lastPosX = undefined;
                     target.lastPosY = undefined;
@@ -1200,13 +1210,21 @@ function configureBoardEvents() {
     });
     BOARD.on('before:selection:cleared', function(opt) {
         if (opt.target.type == 'activeSelection') {
-            for (let obj of opt.target.getObjects()) {
-                let pieces = (obj.isType('path') ? [obj] : obj.getObjects());
-                for (let piece of pieces) {
-                    piece.set('stroke', piece._stroke);
-                    piece.set('strokeWidth', piece._strokeWidth);
-                    piece._stroke = undefined;
-                    piece._strokeWidth = undefined;
+            let objs = opt.target.getObjects();
+            // If in a multi-select click (CTRL), transfer the basic selection over
+            if (BOARD.ctrlSelection && BOARD.overTarget && objs.length > 0) {
+                for (let obj of objs) {
+                    BOARD.ctrlSelectionObjects.push(obj);
+                }
+            } else {
+                for (let obj of opt.target.getObjects()) {
+                    let pieces = (obj.isType('path') ? [obj] : obj.getObjects());
+                    for (let piece of pieces) {
+                        piece.set('stroke', piece._stroke);
+                        piece.set('strokeWidth', piece._strokeWidth);
+                        piece._stroke = undefined;
+                        piece._strokeWidth = undefined;
+                    }
                 }
             }
         }
