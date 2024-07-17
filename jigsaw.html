@@ -7,6 +7,8 @@
    <script type="text/javascript" src="localstorage.js"></script>
    <script type="text/javascript" src="filesystem.js"></script>
    <script type="text/javascript" src="audio.js"></script>
+   <script type="text/javascript" src="events.js"></script>
+   <script type="text/javascript" src="generator.js"></script>
    <script type="text/javascript" src="jigsaw.js"></script>
    <link rel="stylesheet" href="jigsaw.css">
    <script type="text/javascript" src="libs/croppr/croppr.js"></script>
@@ -30,6 +32,13 @@
         </div>
         <!-- Play Board for solving puzzles -->
         <div id="page2" class="page hidden">
+            <div id="boardButtons" class="boardButtons">
+                <div id="backToMenu" class="backToMenu" onclick="backToMenu()" title="Back to menu"><img src="assets/back.png"></div>
+                <div id="soundOn" class="sound" onclick="setAudioEnabled(false)" title="Sound is on"><img src="assets/sound-on.png"></div>
+                <div id="soundOff" class="sound" onclick="setAudioEnabled(true)" title="Sound is off"><img src="assets/sound-off.png"></div>
+                <div id="ghostImageOn" class="ghostImage" onclick="setPuzzleBackgroundEnabled(false)" title="Ghost image is on"><img src="assets/ghost-image-on.png"></div>
+                <div id="ghostImageOff" class="ghostImage" onclick="setPuzzleBackgroundEnabled(true)" title="Ghost image is off"><img src="assets/ghost-image-off.png"></div>
+            </div>
             <div id="boxCover" class="boxCover" onclick="boxCoverClick()"></div>
             <canvas id="board" class="board"></canvas>
         </div>

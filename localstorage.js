@@ -8,6 +8,8 @@
 // "puzzles_root" - JSON - tracks the puzzles that exist at the root menu level. EX: { PID:{}, FID:name }
 // "puzzles_" + FID - JSON - tracks the puzzles that exist in that folder. Folders cannot be nested. EX: { PID:{}, PID:{} }
 // "stats_" + PID - JSON - tracks stats for the puzzle. TODO: determine structure (# of times completed and best time, per difficulty)
+// "soundEnabled" - boolean - tracks whether sound should be enabled or not
+// "ghostImageEnabled" - boolean - tracks whether the ghost puzzle image should be displayed on the board
 //
 // Puzzle Object
 // {
@@ -110,4 +112,22 @@ function deleteFolder(fid) {
 function movePuzzle(fromFid, toFid, pid) {
     let puzzle = deletePuzzle(fromFid, pid);
     savePuzzle(toFid, pid, puzzle);
+}
+
+function isSoundEnabled() {
+    let enabled = localStorage.getItem("soundEnabled");
+    return enabled || enabled == null;
+}
+
+function setSoundEnabled(enabled) {
+    localStorage.setItem("soundEnabled", enabled);
+}
+
+function isGhostImageEnabled() {
+    let enabled = "true" == localStorage.getItem("ghostImageEnabled");
+    return enabled || enabled == null;
+}
+
+function setGhostImageEnabled(enabled) {
+    localStorage.setItem("ghostImageEnabled", enabled);
 }

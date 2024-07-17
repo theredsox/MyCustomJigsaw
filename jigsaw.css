@@ -600,3 +600,35 @@ ul {
     width: initial;
     z-index: 100;
 }
+
+.boardButtons {
+    background-color: #47a9ff;
+    border: 2px solid #0460b1;
+    display: flex;
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    height: 24px;
+    z-index: 40;
+}
+
+.boardButtons > div:hover {
+    background-color: #0460b1;
+}
+
+.boardButtons > div {
+    background-color: #2c9afa;
+    cursor: pointer;
+    height: 24px;
+    text-align: center;
+    width: 32px;
+}
+
+.boardButtons > div > img {
+    height: 24px;
+    width: auto;
+}
+
+.sound, .ghostImage {
+    border-left: 2px solid #0460b1;
+}

@@ -1,7 +1,5 @@
 // Priority TODOs
-// BUG: Rotate while left mouse held down causes location jump
-// * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
-// * Low: toggle sound, toggle on-board puzzle image, back to menu option (make sure to avoid multiple event listeners on BOARD)
+// * BUG: Rotate while left mouse held down causes location jump
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Code cleanup - ES6 pass and split out sections to different files where possible. This file is getting too large.
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
@@ -16,6 +14,7 @@
 // * Consider using inline HTML format to create objects instead of separate lines for each attribute.
 //       Or find ways to reduce attribute setting. Maybe remove IDs that are identical to class name and look up object by class
 // * Puzzle piece CSS; Look into custom filter to warp the piece image around the edge
+// * Work more on pan aspect ratio. Consider if it should be based on board instead of puzzle image
 // * Puzzle buckets to sort pieces into. Common with doing physical puzzles, but have limited necessity in digital due to ease of stacking pieces vertically
 
 // Tracks the active folder for the puzzle menu
@@ -943,333 +942,6 @@ function zoomTo(percent) {
     return respectZoomMinMax(zoom);
 }
 
-function configureBoardEvents() {
-    BOARD.on('mouse:wheel', function(opt) {
-        var delta = opt.e.deltaY;
-        var zoom = BOARD.getZoom();
-        zoom *= 0.999 ** delta;
-        zoom = respectZoomMinMax(zoom);
-        BOARD.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
-        
-        // If zooming out, more board space is being made visible. Respect the board pan boundaries.
-        if (delta > 0) {
-            respectBoardPanBoundaries(opt.e);
-        }
-        opt.e.preventDefault();
-        opt.e.stopPropagation();
-    });
-    BOARD.on('mouse:down', function(opt) {
-        var evt = opt.e;
-        var target = opt.target
-        // If there is no target
-        if (!target) {
-            if (evt.shiftKey) {
-                // Start multi-select area
-                this.selection = true;
-
-                // Drop any multi-select click (CTRL) selected pieces
-                ctrlSelectionDrop();
-            } else {
-                // Drag the board
-                this.isDragging = true;
-                this.selection = false;
-                this.lastPosX = evt.clientX;
-                this.lastPosY = evt.clientY;
-            }
-        } else if (target) {
-            // Left click
-            if (evt.which == 1) {
-                // Piece pickup if CTRL not pressed and target isn't a multi-select click (CTRL) piece
-                if (!BOARD.ctrlSelection && !BOARD.ctrlSelectionObjects.includes(target)) {
-                    // Drop any multi-select click (CTRL) selected pieces
-                    ctrlSelectionDrop();
-
-                    target._shadow = target.shadow;     // Save original shadow
-
-                    if (target.isType("group")) {
-                        target.getObjects().forEach(function(c) { c.shadow = undefined; });
-                    }
-
-                    var shadow = new fabric.Shadow({
-                        color: "black",
-                        blur: 4,
-                        offsetX: BOARD._shadowUp,
-                        offsetY: BOARD._shadowUp,
-                    });
-                    target.shadow = shadow;
-                    BOARD.renderAll();
-
-                    audio('up');
-                } else if (BOARD.ctrlSelection) {
-                    // Add the target if not already included
-                    if (!BOARD.ctrlSelectionObjects.includes(target)) {
-                        target.newlySelected = true;
-                        BOARD.ctrlSelectionObjects.push(target);
-
-                        // Select the piece/group
-                        let pieces = (target.isType('path') ? [target] : target.getObjects());
-                        for (let piece of pieces) {
-                            piece._stroke = piece.stroke;
-                            piece._strokeWidth = piece.strokeWidth;
-                            piece.set('stroke', '#0460b1');
-                            piece.set('strokeWidth', parseInt(piece._strokeWidth) * 5);
-                        }
-
-                        audio('up');
-                    }
-                    BOARD.ctrlSelectionDrag = true;
-                } else if (BOARD.ctrlSelectionObjects.length > 0) {
-                    // New pieces can only be selected when CTRL is down, but when pieces are currently selected dragging can occur
-                    BOARD.ctrlSelectionDrag = true;
-                }
-            }
-
-            // Right click - Zoom piece
-            if (evt.which == 3 && !BOARD._zoomTarget) {
-                // Save the zoom target so it can unzoom even if not the target when right click is released
-                BOARD._zoomTarget = target;
-
-                // Assure it'll be the front object for viewing
-                target.bringToFront();
-
-                // Determine the scale which will allow the object to zoom to 80% of the board size
-                if (BOARD.width > BOARD.height) {
-                    var boundingRectFactor = target.getBoundingRect(false).height / target.getScaledHeight();
-                    target._maxScale = (BOARD.height * .8) / target.height / boundingRectFactor;
-                } else {
-                    var boundingRectFactor = target.getBoundingRect(false).width / target.getScaledWidth();
-                    target._maxScale = (BOARD.width * .8) / target.width / boundingRectFactor;
-                }
-
-                animatePath(target, 'scaleX', target._maxScale, 500, true, function(path) {
-                    // Remember the original values for unzoom
-                    path._zoomScale = path.scaleX;
-                    path._zoomLeft = path.left;
-                    path._zoomTop = path.top;
-                }, function(path, curValue) {
-                    path.scale(curValue);
-                    setZoomPosition(path, curValue);
-                }, function(path) {
-                    path.setCoords();
-                });
-            }
-        }
-
-        // Disable browser mouse right click menu during gameplay
-        if (BOARD && evt.which == "3") {
-            evt.preventDefault();
-        }
-    });
-    BOARD.on('mouse:move', function(opt) {
-        var e = opt.e;
-        let target = opt.target;
-
-        if (this.isDragging) {
-            var vpt = this.viewportTransform;
-            vpt[4] += e.clientX - this.lastPosX;
-            vpt[5] += e.clientY - this.lastPosY;
-           
-            respectBoardPanBoundaries(e);
-
-            this.requestRenderAll();
-            this.lastPosX = e.clientX;
-            this.lastPosY = e.clientY;
-        } else if (BOARD.ctrlSelectionDrag && target && BOARD.ctrlSelectionObjects.includes(target) && !target.newlySelected) {
-            // If in a multi-select click (CTRL), move all selected objects
-            if (target.lastPosX && target.lastPosY) {
-                let xDiff = target.left - target.lastPosX;
-                let yDiff = target.top - target.lastPosY;
-                
-                for (let obj of BOARD.ctrlSelectionObjects) {
-                    if (obj != target) {
-                        obj.left += xDiff;
-                        obj.top += yDiff;
-                    }
-                }
-                BOARD.renderAll();
-            }
-            target.lastPosX = target.left;
-            target.lastPosY = target.top;
-        }
-    });
-    BOARD.on('mouse:up', function(opt) {
-        var evt = opt.e;
-        let target = opt.target;
-
-        // On mouse up recalculate new interaction for all objects, so call setViewportTransform
-        this.setViewportTransform(this.viewportTransform);
-        this.isDragging = false;
-        this.selection = true;
-
-        // Left click
-        if (evt.which == 1) {
-            if (target) {
-                // If in a single piece pickup, drop it.
-                if (!BOARD.ctrlSelection && !BOARD.ctrlSelectionObjects.includes(target)) {
-                    audio('down');
-                    target.shadow = target._shadow;
-                    target._shadow = undefined;
-                    snapPathOrGroup(target);
-                } else if (!BOARD.ctrlSelection && BOARD.ctrlSelectionObjects.includes(target) && !target.lastPosX && !target.lastPosX) {
-                    // If clicking the board and no drag was performed, drop any multi-select click (CTRL) selected pieces
-                    ctrlSelectionDrop();
-                } else {
-                    // If the target wasn't added in this click and not being moved, assume it is being unselected
-                    if (BOARD.ctrlSelection && !target.newlySelected && !target.lastPosX && !target.lastPosX) {
-                        const index = BOARD.ctrlSelectionObjects.indexOf(target);
-                        if (index > -1) {
-                            audio('down');
-                            BOARD.ctrlSelectionObjects.splice(index, 1);
-
-                            // Deselect the piece/group
-                            let pieces = (target.isType('path') ? [target] : target.getObjects());
-                            for (let piece of pieces) {
-                                piece.set('stroke', piece._stroke);
-                                piece.set('strokeWidth', piece._strokeWidth);
-                                piece._stroke = undefined;
-                                piece._strokeWidth = undefined;
-                            }
-                        }
-                    }
-
-                    if (BOARD.ctrlSelection && target.newlySelected) {
-                        // Move the piece to where the first piece is and bring it to the top
-                        if (BOARD.ctrlSelectionObjects[0] != target) {
-                            target.left = BOARD.ctrlSelectionObjects[0].left;
-                            target.top = BOARD.ctrlSelectionObjects[0].top;
-                            target.setCoords();
-                            target.bringToFront();
-                        }
-                    }
-
-                    target.newlySelected = false;
-                    target.lastPosX = undefined;
-                    target.lastPosY = undefined;
-                    BOARD.ctrlSelectionDrag = false;
-                }
-            } else if (BOARD.lastPosX == evt.clientX && BOARD.lastPosY == evt.clientY) {
-                // If clicking the board and no drag was performed, drop any multi-select click (CTRL) selected pieces
-                ctrlSelectionDrop();
-            }
-        }
-
-        // Right click - Unzoom piece
-        if (evt.which == 3) {
-            let target = BOARD._zoomTarget;
-            if (target && !target.unzoomInProgress) {
-                target.unzoomInProgress = true;
-                
-                animatePath(target, 'scaleX', target._zoomScale, 500, true, undefined, function(path, curValue) {
-                    path.scale(curValue);
-                    setZoomPosition(path, curValue);
-                }, function(path) {
-                    path.left = path._zoomLeft;
-                    path.top = path._zoomTop;
-                    path.setCoords();
-                    path._maxScale = null;
-                    path._zoomScale = null;
-                    path._zoomLeft = null;
-                    path._zoomTop = null;
-                    BOARD._zoomTarget = null;
-                    target.unzoomInProgress = false;
-                });
-            }
-        }
-
-        // Disable browser mouse right click menu during gameplay
-        if (BOARD && evt.which == "3") {
-            evt.preventDefault();
-        }
-    });
-    BOARD.on('mouse:over', function(opt) {
-        BOARD.overTarget = opt.target;
-    });
-    BOARD.on('mouse:out', function(opt) {
-        BOARD.overTarget = undefined;
-    });
-    BOARD.on('selection:created', function(opt) {
-        if (opt.selected.length > 1) {
-            var group = BOARD.getActiveObject();
-            group.hasBorders = false;
-            group.hasControls = false;
-            group.lockRotation = true;
-            group.lockScalingX = true;
-            group.lockScalingY = true;
-            group.perPixelTargetFind = true;
-
-            for (let obj of group.getObjects()) {
-                let pieces = (obj.isType('path') ? [obj] : obj.getObjects());
-                for (let piece of pieces) {
-                    piece._stroke = piece.stroke;
-                    piece._strokeWidth = piece.strokeWidth;
-                    piece.set('stroke', '#0460b1');
-                    piece.set('strokeWidth', parseInt(piece._strokeWidth) * 5);
-                }
-            }
-        }
-    });
-    BOARD.on('before:selection:cleared', function(opt) {
-        if (opt.target.type == 'activeSelection') {
-            let objs = opt.target.getObjects();
-            // If in a multi-select click (CTRL), transfer the basic selection over
-            if (BOARD.ctrlSelection && BOARD.overTarget && objs.length > 0) {
-                for (let obj of objs) {
-                    BOARD.ctrlSelectionObjects.push(obj);
-                }
-            } else {
-                for (let obj of opt.target.getObjects()) {
-                    let pieces = (obj.isType('path') ? [obj] : obj.getObjects());
-                    for (let piece of pieces) {
-                        piece.set('stroke', piece._stroke);
-                        piece.set('strokeWidth', piece._strokeWidth);
-                        piece._stroke = undefined;
-                        piece._strokeWidth = undefined;
-                    }
-                }
-            }
-        }
-    });
-
-    window.addEventListener("keydown", function(e) {
-        // Rotate piece
-        if (BOARD.orientation > 0 && e.key == "Alt" && BOARD.overTarget) {
-            // Grab a reference immediately since mouse:out can detach target during animation
-            let target = BOARD.overTarget;
-            if (!target.rotationInProgress) {
-                target.rotationInProgress = true; // Toggled off at the end of resetOrigin when the animation has finished
-                let angle = BOARD.orientation == 1 ? 180 : 90;
-                animatePath(target, 'angle', target.angle + angle, 250, true, undefined, function(path, curAngle) {
-                    const pivot = path.translateToOriginPoint(path.getCenterPoint(), path._originX, path._originY);
-                    path.angle = curAngle;
-                    path.setPositionByOrigin(pivot, path._originX, path._originY);
-                }, function(path) {
-                    path.straighten();
-                    path.rotationInProgress = false;
-                    snapPathOrGroup(path);
-                });
-
-                audio('rotate');
-            }
-        }
-
-        // Enable multi-select drag when shift key is pressed
-        BOARD.selection = e.key == "Shift" && !BOARD.overTarget;
-        
-        // Enable multi-select click when CTRL key is pressed
-        BOARD.ctrlSelection = e.key == "Control";
-
-        // Disable certain browser key shortcuts during active puzzle play.
-        if (BOARD && e.key == "Alt") {
-            e.preventDefault();
-        }
-    });
-    window.addEventListener("keyup", function(e) {
-        if (e.key == "Control") {
-            BOARD.ctrlSelection = false;
-        }
-    });
-}
-
 function ctrlSelectionDrop() {
     if (BOARD.ctrlSelectionObjects.length > 0) {
         // Drop the selected pieces
@@ -1693,8 +1365,9 @@ async function startPuzzle(id, difficulty, orientation) {
             evented: false, 
             selectable: false });
         bg.canvas = BOARD;
-        BOARD.backgroundImage = bg;
-
+        BOARD._backgroundImage = bg;
+        setPuzzleBackgroundEnabled(isGhostImageEnabled());
+            
         // Set a wide initial zoom to see puzzle image and then shuffle take place
         let zoom = zoomTo(.4);
         BOARD.setZoom(zoom);
@@ -1774,10 +1447,26 @@ async function startPuzzle(id, difficulty, orientation) {
 
         // Show the drawn puzzle for 2 seconds and then shuffle to start the game
         setTimeout(function() {
-            configureBoardEvents();
+            configureBoardEvents(BOARD);
             //shufflePieces();
         }, 2000);
     };
+}
+
+function setPuzzleBackgroundEnabled(enabled) {
+    if (enabled) {
+        document.getElementById("ghostImageOn").classList.remove("remove");
+        document.getElementById("ghostImageOff").classList.add("remove");
+        BOARD.backgroundImage = BOARD._backgroundImage;
+        BOARD._backgroundImage = undefined;
+    } else {
+        document.getElementById("ghostImageOn").classList.add("remove");
+        document.getElementById("ghostImageOff").classList.remove("remove");
+        BOARD._backgroundImage = BOARD.backgroundImage;
+        BOARD.backgroundImage = undefined;
+    }
+    BOARD.renderAll();
+    setGhostImageEnabled(enabled);     // Save setting
 }
 
 function animatePath(path, prop, endPoint, duration, render, onBeforeFunc, onChangeFunc, onCompleteFunc) {
@@ -1903,194 +1592,29 @@ function boxCoverClick() {
     }
 }
 
-class PuzzlePiece {
-    // DOM Element ID for this piece
-    id;
-
-    // Integers representing this piece's location within the puzzle
-    row; col;
-
-    // Path2D strings representing a side of this piece
-    top; right; bottom; left;
-
-    // The fabric Path object representing this piece
-    object;
-
-    constructor(id, row, col) {
-        this.id = id;
-        this.row = row;
-        this.col = col;
-    }
-}
-
-class PuzzleGenerator {
-    constructor(puzzleMetadata, rows, cols) {
-        this.width = puzzleMetadata.width;
-        this.height = puzzleMetadata.height;
-        this.yn = rows;
-        this.xn = cols;
-        this.radius = 0.0;
+function backToMenu() {
+    if (!confirm("Are you sure you want to leave the puzzle?")) {
+        return;
     }
 
-    generatePieces() {
-        let pieces = [];
-        
-        this.generate_rows(pieces)
-        this.generate_columns(pieces);
-
-        return pieces;
+    // Clear out existing fabric canvas object
+    removeBoardEvents();
+    BOARD.clear();
+    let containers = document.getElementsByClassName("canvas-container")
+    while (containers.length > 0) { 
+        containers[containers.length - 1].remove();
     }
-
-    getOrCreatePiece(pieces) {
-        let row = pieces[this.yi];
-        if (!row) {
-            row = [];
-            pieces[this.yi] = row;
-        }
-        let piece = row[this.xi];
-        if (!piece) {
-            piece = new PuzzlePiece(this.yi + ":" + this.xi, this.yi, this.xi);
-            pieces[this.yi][this.xi] = piece;
-        }
-        return piece;
-    }
-
-    generate_rows(pieces) {
-        this.vertical = 0;
-       
-        for (this.yi = 0; this.yi < this.yn; this.yi++) {
-            this.xi = 0;    // Needs to be set before first()
-            this.first();
-
-            for (; this.xi < this.xn; this.xi++) {
-                let piece = this.getOrCreatePiece(pieces);
-
-                // Top is the path starting point, clockwise from relative 0,0 position
-                let startPoint = "M " + this.p0l() + " " + this.p0w();
-                
-                // On the first row, set the top puzzle border edge
-                if (this.yi == 0) {
-                    let line = "L " + this.l(1.0) + " " + this.w(0.0);
-                    piece.top = startPoint + " " + line;
-                } else {
-                    // Internal curved edge
-                    let curveTop = "C " + this.p1l() + " " + this.p1w() + " " + this.p2l() + " " + this.p2w() + " " + this.p3l() + " " + this.p3w() + " ";
-                    curveTop += "C " + this.p4l() + " " + this.p4w() + " " + this.p5l() + " " + this.p5w() + " " + this.p6l() + " " + this.p6w() + " ";
-                    curveTop += "C " + this.p7l() + " " + this.p7w() + " " + this.p8l() + " " + this.p8w() + " " + this.p9l() + " " + this.p9w();
-                    
-                    // Set the top of the current piece
-                    piece.top = startPoint + " " + curveTop;
-
-                    // Internal curved edge
-                    let curveBottom = "C " + this.p8l() + " " + this.p8w() + " " + this.p7l() + " " + this.p7w() + " " + this.p6l() + " " + this.p6w() + " ";
-                    curveBottom += "C " + this.p5l() + " " + this.p5w() + " " + this.p4l() + " " + this.p4w() + " " + this.p3l() + " " + this.p3w() + " ";
-                    curveBottom += "C " + this.p2l() + " " + this.p2w() + " " + this.p1l() + " " + this.p1w() + " " + this.p0l() + " " + this.p0w();
-
-                    // Set the bottom of the previous row piece, whose edge is shared with the top edge of this piece
-                    let prevPiece = pieces[this.yi - 1][this.xi];
-                    prevPiece.bottom = curveBottom;
-                }
-                
-                // On the last row, set the bottom puzzle border edge
-                if (this.yi == (this.yn - 1)) {
-                    let line = "L " + this.l(0.0) + " " + this.height;
-                    piece.bottom = line;
-                }
-                
-                this.next();
-            }
-        }
-    }
-
-    generate_columns(pieces) {
-        this.vertical = 1;
-         
-        for (this.xi = 0; this.xi < this.xn; this.xi++) {
-            this.yi = 0
-            this.first();
-
-            for (; this.yi < this.yn; this.yi++) {
-                let piece = this.getOrCreatePiece(pieces);
-
-                // On the first column, set the left puzzle border edge
-                if (this.xi == 0) {
-                    let line = "L " + this.w(0.0) + " " + this.l(0.0);
-                    piece.left = line;
-                } else {
-                    // Internal curved edge
-                    let curveLeft = "C " + this.p8w() + " " + this.p8l() + " " + this.p7w() + " " + this.p7l() + " " + this.p6w() + " " + this.p6l() + " ";
-                    curveLeft += "C " + this.p5w() + " " + this.p5l() + " " + this.p4w() + " " + this.p4l() + " " + this.p3w() + " " + this.p3l() + " ";
-                    curveLeft += "C " + this.p2w() + " " + this.p2l() + " " + this.p1w() + " " + this.p1l() + " " + this.p0w() + " " + this.p0l();
-                    
-                    // Set the left of the current piece
-                    piece.left = curveLeft;
-
-                    // Internal curved edge
-                    let curveRight = "C " + this.p1w() + " " + this.p1l() + " " + this.p2w() + " " + this.p2l() + " " + this.p3w() + " " + this.p3l() + " ";
-                    curveRight += "C " + this.p4w() + " " + this.p4l() + " " + this.p5w() + " " + this.p5l() + " " + this.p6w() + " " + this.p6l() + " ";
-                    curveRight += "C " + this.p7w() + " " + this.p7l() + " " + this.p8w() + " " + this.p8l() + " " + this.p9w() + " " + this.p9l();
-
-                    // Set the right of the previous column piece, whose edge is shared with the left edge of this piece
-                    let prevPiece = pieces[this.yi][this.xi - 1];
-                    prevPiece.right = curveRight;
-                }
-                
-                // On the last column, set the right puzzle border edge
-                if (this.xi == (this.xn - 1)) {
-                    let line = "L " + this.width + " " + this.l(1.0);
-                    piece.right = line;
-                }
-
-                this.next();
-            }
-        }
-    }
-
-    // Internals for edge generation; cubic bezier curves generation
-    a; b; c; d; e; t; j; flip; xi; yi; xn; yn; vertical; offset = 0; width; height; radius; seed = 1;
+    BOARD = undefined;
     
-    random() { var x = Math.sin(this.seed) * 10000; this.seed += 1; return x - Math.floor(x); }
-    uniform(min, max) { var r = this.random(); return min + r * (max - min); }
-    rbool() { return this.random() > 0.5; }
-    
-    first() { this.e = this.uniform(-this.j, this.j); this.next();}
-    next()  { this.seeds(); var flipold = this.flip; this.flip = this.rbool(); this.a = (this.flip == flipold ? -this.e: this.e); this.b = this.uniform(-this.j, this.j); this.c = this.uniform(-this.j, this.j); this.d = this.uniform(-this.j, this.j); this.e = this.uniform(-this.j, this.j);}
-    
-    sl()  { return this.vertical ? this.height / this.yn : this.width / this.xn; }
-    sw()  { return this.vertical ? this.width / this.xn : this.height / this.yn; }
-    ol()  { return this.offset + this.sl() * (this.vertical ? this.yi : this.xi); }
-    ow()  { return this.offset + this.sw() * (this.vertical ? this.xi : this.yi); }
-    l(v)  { var ret = this.ol() + this.sl() * v; return Math.round(ret * 100) / 100; }
-    w(v)  { var ret = this.ow() + this.sw() * v * (this.flip ? -1.0 : 1.0); return Math.round(ret * 100) / 100; }
-    p0l() { return this.l(0.0); }
-    p0w() { return this.w(0.0); }
-    p1l() { return this.l(0.2); }
-    p1w() { return this.w(this.a); }
-    p2l() { return this.l(0.5 + this.b + this.d); }
-    p2w() { return this.w(-this.t + this.c); }
-    p3l() { return this.l(0.5 - this.t + this.b); }
-    p3w() { return this.w(this.t + this.c); }
-    p4l() { return this.l(0.5 - 2.0 * this.t + this.b - this.d); }
-    p4w() { return this.w(3.0 * this.t + this.c); }
-    p5l() { return this.l(0.5 + 2.0 * this.t + this.b - this.d); }
-    p5w() { return this.w(3.0 * this.t + this.c); }
-    p6l() { return this.l(0.5 + this.t + this.b); }
-    p6w() { return this.w(this.t + this.c); }
-    p7l() { return this.l(0.5 + this.b + this.d); }
-    p7w() { return this.w(-this.t + this.c); }
-    p8l() { return this.l(0.8); }
-    p8w() { return this.w(this.e); }
-    p9l() { return this.l(1.0); }
-    p9w() { return this.w(0.0); }
-    randomNum(min, max, decimals) {
-        var precision = Math.pow(10, decimals);
-        min *= precision;
-        max *= precision;
-        return Math.floor((Math.random() * (max - min)) + min) / precision;
-    }
-    seeds() { 
-        this.seed = Math.random() * 10000;
-        this.t = this.randomNum(20, 25, 1) / 200.0;
-        this.j = this.randomNum(0, 5, 1) / 100.0;
-    }
+    // Create new canvas
+    let board = document.createElement("canvas");
+    board.id = "board";
+    board.className = "board";
+    document.getElementById("page2").appendChild(board);
+
+    // Transition to the menu page
+    displayPage("page2", false, false);
+    setTimeout(function(){
+        displayPage("page1", true, true);
+    }, 600);
 }
