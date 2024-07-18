@@ -1,13 +1,12 @@
 // Priority TODOs
-// * BUG: Rotate while left mouse held down causes location jump
 // * Implement import and export buttons (Export to zip, import from zip)
 // * Code cleanup - ES6 pass and split out sections to different files where possible. This file is getting too large.
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
-// * Add a Rename button 
 // * Create a help menu (describes controls; drag and drop and mouse/keys for when playing)
 // * Auto save board state for continuing later
 // * Create a first pass at stat tracking
 // * Add handling of filesystem.js exceptions so that menu's continue to load if a file is missing and that an error is raised if a failure happens saving any of the images during puzzle creation
+// * Add a Rename button 
 // * Advanced play options - auto-sorting by shape/color onto board or into buckets
 // * Add loading message for puzzle creation (and maybe other areas like waiting on puzzle images)
 // * Simplify/clean up CSS. Like display: individual none/inline's using .remove and .add instead

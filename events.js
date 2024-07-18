@@ -316,14 +316,26 @@ function eventListenerKeydown(evt) {
         // Grab a reference immediately since mouse:out can detach target during animation
         let target = BOARD.overTarget;
         if (!target.rotationInProgress) {
-            target.rotationInProgress = true; // Toggled off at the end of resetOrigin when the animation has finished
             let angle = BOARD.orientation == 1 ? 180 : 90;
-            animatePath(target, 'angle', target.angle + angle, 250, true, undefined, function(path, curAngle) {
+            animatePath(target, 'angle', target.angle + angle, 250, true, function(path){
+                path.rotationInProgress = true;
+                path.lockMovementX = true;
+                path.lockMovementY = true;
+                path._left = path.left;
+                path._top = path.top;
+            }, function(path, curAngle) {
                 const pivot = path.translateToOriginPoint(path.getCenterPoint(), path._originX, path._originY);
                 path.angle = curAngle;
                 path.setPositionByOrigin(pivot, path._originX, path._originY);
             }, function(path) {
                 path.straighten();
+
+                rotateWhileMovingWorkaround(path, evt);
+
+                path._left = undefined;
+                path._top = undefined;
+                path.lockMovementX = false;
+                path.lockMovementY = false;
                 path.rotationInProgress = false;
                 snapPathOrGroup(path);
             });
@@ -347,5 +359,27 @@ function eventListenerKeydown(evt) {
 function eventListenerKeyup(evt) {
     if (evt.key == "Control") {
         BOARD.ctrlSelection = false;
+    }
+}
+
+// FabricJS appears to have a bug where if you rotate an object while it is being dragged,
+// some internal values used in the move are not being properly updated. This is a workaround,
+// I came up with for it. Hopefully can be removed after a future release of the lib.
+function rotateWhileMovingWorkaround(target, e) {
+    if (BOARD._currentTransform?.target == target) {
+        // [x,y] shift due to rotate
+        let diffLeft = target._left - target.left;
+        let diffTop = target._top - target.top;
+
+        // Original [x,y] upon piece being picked up
+        let origLeft = BOARD._currentTransform.ex - BOARD._currentTransform.offsetX;
+        let origTop = BOARD._currentTransform.ey - BOARD._currentTransform.offsetY;
+
+        // Recalc the original offsets accounting for the rotation difference
+        BOARD._currentTransform.offsetX = BOARD._currentTransform.ex - (origLeft - diffLeft);
+        BOARD._currentTransform.offsetY = BOARD._currentTransform.ey - (origTop - diffTop);
+
+        // Update other props in the transform related to the target
+        BOARD._currentTransform.theta = fabric.util.degreesToRadians(BOARD._currentTransform.target.angle);
     }
 }
