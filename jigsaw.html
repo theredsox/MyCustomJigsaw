@@ -11,6 +11,7 @@
    <script type="text/javascript" src="generator.js"></script>
    <script type="text/javascript" src="jigsaw.js"></script>
    <link rel="stylesheet" href="jigsaw.css">
+   <script type="text/javascript" src="libs/zip/zip.js"></script>
    <script type="text/javascript" src="libs/croppr/croppr.js"></script>
    <link rel="stylesheet" href="libs/croppr/croppr.css">
    <script type="text/javascript" src="libs/fabric/fabric.js"></script>
@@ -44,7 +45,9 @@
         </div>
     </div>
     <!-- Hidden input for user to upload puzzle images -->
-    <input id="fileOpener" type="file" accept="image/png, image/gif, image/jpeg, image/webp" style="display: none" />
+    <input id="fileOpener" type="file" accept="image/png, image/gif, image/jpeg, image/webp" style="display: none" onchange="fileOpenerChange(this)"/>
+    <!-- Hidden input for user to import puzzle data -->
+    <input id="importOpener" type="file" accept=".zip" style="display: none" onchange="importPuzzlesChange(this)"/>
     <!-- Data management; viewing usage, importing and exporting all user generated data -->
     <div id="diskSpace" class="diskSpace" onclick="toggleDiskSpaceText()" title="Click for disk usage">
         <img src="assets/diskspace.png" />
@@ -62,6 +65,11 @@
     <div id="infoOverlay" class="infoOverlay remove">
         <span id="infoOverlayText"></span>
         <button class="infoOverlayClose" onclick="closeInfoOverlay()">Close</button>
+    </div>
+    <!-- A reusable overlay for providing users additional information about a UI element -->
+    <div id="processingOverlay" class="processingOverlay remove">
+        <img class="processingOverlayImage" src="assets/processing.png" height="50" width="50" />
+        <span class="processingOverlaySpan">Processing, please wait...</span>
     </div>
     <!-- Overlay for creating a new puzzle -->
     <div id="createPuzzleOverlay" class="createPuzzleOverlay remove">

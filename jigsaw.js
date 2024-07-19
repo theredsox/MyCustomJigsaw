@@ -1,5 +1,4 @@
 // Priority TODOs
-// * Implement import and export buttons (Export to zip, import from zip)
 // * Code cleanup - ES6 pass and split out sections to different files where possible. This file is getting too large.
 // * Icons for main menu buttons (create buzzle, create folder, delete, return home, move puzzle home) to go with the text
 // * Create a help menu (describes controls; drag and drop and mouse/keys for when playing)
@@ -466,39 +465,36 @@ function loadPlayOverlay(menuItem, event) {
 }
 
 function createPuzzle() {
-
-    var fileOpener = document.getElementById("fileOpener");
-    
-    // Register post-image selection work
-    fileOpener.addEventListener("change", function(){
-        if (fileOpener.files.length > 0) {
-            // Default title to file name
-            var createPuzzleName = document.getElementById("createPuzzleName");
-            createPuzzleName.value = formatTitle(fileOpener.files[0].name);
-
-            // Populate the image preview
-            var createPuzzlePreview = document.getElementById("createPuzzlePreview");
-            createPuzzlePreview.src = URL.createObjectURL(fileOpener.files[0]);
-
-            createPuzzlePreview.onload = function() {
-                // TODO: If image resolution is too small, kick back to main menu page and alert user to choose a different image
-                
-                // Default to nearest supported aspect ratio of uploaded photo
-                let aspectRatio = determineAspectRatio({ width: this.width, height: this.height });
-                document.getElementById("createPuzzleAspectRatio").value = aspectRatio[0] + ":" + aspectRatio[1];
-            }
-
-            // Show the overlays
-            showOverlayCover(closePuzzleOverlay);
-            document.getElementById("createPuzzleOverlay").classList.remove("remove");
-
-            // Change focus to the name input
-            setTimeout(function() { createPuzzleName.focus(); }, 50);
-        }
-    });
-
     // Prompt user to choose an image
-    fileOpener.click();
+    document.getElementById("fileOpener").click();
+}
+
+function fileOpenerChange(fileOpener) {
+    if (fileOpener.files.length > 0) {
+        // Default title to file name
+        var createPuzzleName = document.getElementById("createPuzzleName");
+        createPuzzleName.value = formatTitle(fileOpener.files[0].name);
+
+        // Populate the image preview
+        var createPuzzlePreview = document.getElementById("createPuzzlePreview");
+        createPuzzlePreview.src = URL.createObjectURL(fileOpener.files[0]);
+
+        createPuzzlePreview.onload = function() {
+            // TODO: If image resolution is too small, kick back to main menu page and alert user to choose a different image
+            
+            // Default to nearest supported aspect ratio of uploaded photo
+            let aspectRatio = determineAspectRatio({ width: this.width, height: this.height });
+            document.getElementById("createPuzzleAspectRatio").value = aspectRatio[0] + ":" + aspectRatio[1];
+        }
+
+        // Show the overlays and reset the input
+        showOverlayCover(closePuzzleOverlay);
+        document.getElementById("createPuzzleOverlay").classList.remove("remove");
+        fileOpener.value = '';
+
+        // Change focus to the name input
+        setTimeout(function() { createPuzzleName.focus(); }, 50);
+    }
 }
 
 function createPuzzleStep2() {
@@ -1616,4 +1612,143 @@ function backToMenu() {
     setTimeout(function(){
         displayPage("page1", true, true);
     }, 600);
+}
+
+async function exportPuzzles() {
+    // Show the processing overlay
+    showOverlayCover();
+    document.getElementById("processingOverlay").classList.remove("remove");
+
+    // Create the export zip
+    let zipWriter = new zip.ZipWriter(new zip.BlobWriter("application/zip"), { bufferedWrite: true });
+    
+    // Add the localStorage data, as a JSON file, to the zip
+    let localStorageStr = JSON.stringify(localStorage);
+    zipWriter.add("puzzles.json", new zip.TextReader(localStorageStr), {});
+
+    // Create a "puzzles" directory in the zip
+    zipWriter.add("puzzles/", undefined, {directory: true});
+    
+    // Add all files from the "puzzles" filesystem directory into the new directory in the zip
+    let dir = await getDirectory("puzzles");
+    for await (const handle of dir.values()) {
+        let file = await handle.getFile();
+        zipWriter.add("puzzles/" + file.name, new zip.BlobReader(file), {});
+    }
+
+    // Open a 'save as' prompt for the user to save the export.zip
+    const blobURL = URL.createObjectURL(await zipWriter.close());
+    const anchor = document.createElement("a");
+    anchor.href = blobURL;
+    anchor.download = "puzzles-export-" + todayAsString() + ".zip";
+
+    // Hide the processing overlay, ready to prompt 'save as' dialog
+    document.getElementById("processingOverlay").classList.add("remove");
+    hideOverlayCover();
+
+    const clickEvent = new MouseEvent("click");
+    anchor.dispatchEvent(clickEvent);
+
+    // Clean up
+    zipWriter = null;
+}
+
+// Returns today's date as a string in the format of YYYY-MM-DD
+function todayAsString() {
+    let currentDate = new Date();
+    let year = currentDate.getFullYear();
+    let month = ('0' + (currentDate.getMonth() + 1)).slice(-2);
+    let day = ('0' + currentDate.getDate()).slice(-2);
+
+    return `${year}-${month}-${day}`;
+}
+
+async function importPuzzles() {
+    // Prompt user to choose a zip file
+    document.getElementById("importOpener").click();
+}
+
+async function importPuzzlesChange(importOpener) {
+    if (importOpener.files.length > 0) {
+        // Show the processing overlay
+        showOverlayCover();
+        document.getElementById("processingOverlay").classList.remove("remove");
+
+        let zipReader = new zip.ZipReader(new zip.BlobReader(importOpener.files[0]), {});
+        let entries = await zipReader.getEntries();
+        let entry = entries.filter(e => !e.directory && e.filename == "puzzles.json");
+        if (entry.length == 0) {
+            alert("Invalid puzzle export: puzzles.json not found inside");
+            return;
+        }
+        
+        // Parse the JSON
+        let data = await entry[0].getData(new zip.BlobWriter(), {});
+        let str = await data.text();
+        var json = JSON.parse(str);
+        for (let jsonEntry of Object.entries(json)) {
+            json[jsonEntry[0]] = JSON.parse(jsonEntry[1]);
+        }
+
+        // Merge the data into the existing localStorage
+
+        // Settings
+        if (!localStorageExists("soundEnabled")) {
+            localStorageSet("soundEnabled", json["soundEnabled"]);
+        }
+        if (!localStorageExists("ghostImageEnabled")) {
+            localStorageSet("ghostImageEnabled", json["ghostImageEnabled"]);
+        }
+
+        // Folder/puzzle structures
+        let root = json["puzzles_root"]
+        for (let [k, v] of Object.entries(root)) {
+            if (k.startsWith("f")) {
+                let folder = findFolderByName(v);
+                if (!folder) {
+                    // Create the folder
+                    let fid = getAndIncrementNextFolderID();
+                    addFolder(fid, v);
+                    folder = [fid, v];
+                }
+                
+                // Import any puzzles not found by title
+                let dir = json["puzzles_" + k];
+                for (let [key, value] of Object.entries(dir)) {
+                    let puzzle = findPuzzleByTitle(folder[0], value["title"]);
+                    if (!puzzle) {
+                        // Create puzzle and import its images from the zip
+                        let pid = getAndIncrementNextPuzzleID();
+                        await importImage(entries, key + ".png", pid + ".png");
+                        await importImage(entries, key + "preview.png", pid + "preview.png");
+                        savePuzzle(folder[0], pid, value);
+                    }
+                }
+            } else {
+                let puzzle = findPuzzleByTitle("root", v["title"]);
+                if (!puzzle) {
+                    // Create puzzle and import its images from the zip
+                    let pid = getAndIncrementNextPuzzleID();
+                    await importImage(entries, k + ".png", pid + ".png");
+                    await importImage(entries, k + "preview.png", pid + "preview.png");
+                    savePuzzle("root", pid, v);
+                }
+            }
+        }
+
+        // Refresh the menu, hide the processing overlay, and reset the input
+        await loadMainMenu();
+        document.getElementById("processingOverlay").classList.add("remove");
+        hideOverlayCover();
+        importOpener.value = '';
+    }
+}
+
+async function importImage(entries, entryName, importName) {
+    let img = entries.filter(e => !e.directory && e.filename == "puzzles/" + entryName);
+    if (img.length > 0) {
+        var newFile = await createFile("puzzles", importName);
+        let pngBlob = await img[0].getData(new zip.BlobWriter(), {});
+        await writeFile(newFile, pngBlob);
+    }
 }

@@ -131,3 +131,23 @@ function isGhostImageEnabled() {
 function setGhostImageEnabled(enabled) {
     localStorage.setItem("ghostImageEnabled", enabled);
 }
+
+function localStorageExists(key) {
+    return localStorage.getItem(key) != null;
+}
+
+function localStorageSet(key, value) {
+    localStorage.setItem(key, value);
+}
+
+function findFolderByName(name) {
+    let puzzles = getPuzzles("root");
+    let matches = Object.entries(puzzles).filter(([k, v]) => k.startsWith("f") && v == name);
+    return matches.length > 0 ? matches[0] : undefined;
+}
+
+function findPuzzleByTitle(fid, title) {
+    let puzzles = getPuzzles(fid);
+    let matches = Object.entries(puzzles).filter(([k, v]) => k.startsWith("p") && v.title == title);
+    return matches.length > 0 ? matches[0] : undefined;
+}

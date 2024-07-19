@@ -13,6 +13,13 @@ async function getRootDirectory() {
 }
 
 // @param dir - string
+// @return FileSystemDirectoryHandle
+async function getDirectory(dir) {
+    const rootDir = await getRootDirectory();
+    return await rootDir.getDirectoryHandle(dir, { "create" : true });
+}
+
+// @param dir - string
 // @param filename - string
 // @return FileSystemFileHandle
 async function createFile(dir, filename) {
@@ -35,6 +42,20 @@ async function writeFile(file, contents) {
 
 // @param dir - string
 // @param filename - string
+// @return boolean - true if file exists
+async function isFile(dir, filename) {
+    const rootDir = await getRootDirectory();
+    const currentDir = await rootDir.getDirectoryHandle(dir);
+    try {
+        await currentDir.getFileHandle(filename);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// @param dir - string
+// @param filename - string
 // @return File - Web API File, extends Blob
 async function readFile(dir, filename) {
     const rootDir = await getRootDirectory();
@@ -43,6 +64,8 @@ async function readFile(dir, filename) {
     return await file.getFile();
 }
 
+// @param dir - string
+// @param filename - string
 async function deleteFile(dir, filename) {
     const rootDir = await getRootDirectory();
     const currentDir = await rootDir.getDirectoryHandle(dir);
