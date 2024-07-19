@@ -1024,6 +1024,13 @@ function snapPathOrGroup(target) {
 
     if (snapped) {
         audio('snap');
+
+        if (BOARD.getObjects().length == 1) {
+            // Stop and clear out auto-save. Then do victory animation.
+            clearInterval(BOARD.interval);
+            clearAutoSave();
+            victoryCelebration();
+        }
     }
 }
 
@@ -1324,6 +1331,7 @@ async function startPuzzle(id, difficulty, orientation) {
             width: window.innerWidth - 20,
             height: window.innerHeight - 20,
         });
+        BOARD.id = id;
         BOARD.puzzle = puzzle;
         BOARD.pieces = pieces;
         BOARD.panWidth = puzzle.width * 3;
@@ -1367,58 +1375,62 @@ async function startPuzzle(id, difficulty, orientation) {
         let zoom = zoomTo(.4);
         BOARD.setZoom(zoom);
 
-        // Creates a board with all the pieces and the background
-        for (let r = 0; r < generator.yn; r++) {
-            for (let c = 0; c < generator.xn; c++) {
-                let piece = pieces[r][c];
-                const paths = piece.top + " " + piece.right + " " + piece.bottom + " " + piece.left;
-                let path = new fabric.Path(paths);
-                path.hasBorders = false;
-                path.hasControls = false;
-                path.stroke = "black";
-                // TODO: Knock down the width for smaller resolution photos that choose a lot of pieces.
-                // So maybe based on Path size?
-                path.strokeWidth = stroke;
-                path.lockRotation = true;
-                path.lockScalingX = true;
-                path.lockScalingY = true;
-                path.perPixelTargetFind = true;
+        if (isAutoSave()) {
+            loadAutoSave();
+        } else {
+            // Creates a board with all the pieces and the background
+            for (let r = 0; r < generator.yn; r++) {
+                for (let c = 0; c < generator.xn; c++) {
+                    let piece = pieces[r][c];
+                    const paths = piece.top + " " + piece.right + " " + piece.bottom + " " + piece.left;
+                    let path = new fabric.Path(paths);
+                    path.hasBorders = false;
+                    path.hasControls = false;
+                    path.stroke = "black";
+                    // TODO: Knock down the width for smaller resolution photos that choose a lot of pieces.
+                    // So maybe based on Path size?
+                    path.strokeWidth = stroke;
+                    path.lockRotation = true;
+                    path.lockScalingX = true;
+                    path.lockScalingY = true;
+                    path.perPixelTargetFind = true;
 
-                // Locking user movement until shuffling completes
-                //path.lockMovementX = true;
-                //path.lockMovementY = true;
+                    // Locking user movement until shuffling completes
+                    //path.lockMovementX = true;
+                    //path.lockMovementY = true;
 
-                // Set the image as the background
-                let pattern = new fabric.Pattern({
-                    source: img,
-                    repeat: "no-repeat"
-                });
-                pattern.offsetX = 0 - path.left;
-                pattern.offsetY = 0 - path.top;
-                path.set("fill", pattern);
+                    // Set the image as the background
+                    let pattern = new fabric.Pattern({
+                        source: img,
+                        repeat: "no-repeat"
+                    });
+                    pattern.offsetX = 0 - path.left;
+                    pattern.offsetY = 0 - path.top;
+                    path.set("fill", pattern);
 
-                // Give the pieces a bit of 3D look
-                var shadow = new fabric.Shadow({
-                    color: "black",
-                    blur: 3,
-                    offsetX: BOARD._shadow,
-                    offsetY: BOARD._shadow,
-                });
-                path.shadow = shadow;
+                    // Give the pieces a bit of 3D look
+                    var shadow = new fabric.Shadow({
+                        color: "black",
+                        blur: 3,
+                        offsetX: BOARD._shadow,
+                        offsetY: BOARD._shadow,
+                    });
+                    path.shadow = shadow;
 
-                path.piece = piece;
-                piece.object = path;
-                BOARD.add(path);
+                    path.piece = piece;
+                    piece.object = path;
+                    BOARD.add(path);
 
-                path.originalCoords = {...path.aCoords};
+                    path.originalCoords = {...path.aCoords};
 
-                // Calculate the offset for the center of the piece vs the bounding box.
-                // This will be used to set the animation rotation point for the piece
-                let boundingCenter = path.getCenterPoint();
-                let pieceCenter = centerOfPiece(path);
-                let centerOffset = new fabric.Point(pieceCenter.x - boundingCenter.x, pieceCenter.y - boundingCenter.y);
-                path._originX = 0.5 + (centerOffset.x / path.width);
-                path._originY = 0.5 + (centerOffset.y / path.height);
+                    // Calculate the offset for the center of the piece vs the bounding box.
+                    // This will be used to set the animation rotation point for the piece
+                    let boundingCenter = path.getCenterPoint();
+                    let pieceCenter = centerOfPiece(path);
+                    let centerOffset = new fabric.Point(pieceCenter.x - boundingCenter.x, pieceCenter.y - boundingCenter.y);
+                    path._originX = 0.5 + (centerOffset.x / path.width);
+                    path._originY = 0.5 + (centerOffset.y / path.height);
+                }
             }
         }
 
@@ -1444,6 +1456,7 @@ async function startPuzzle(id, difficulty, orientation) {
         setTimeout(function() {
             configureBoardEvents(BOARD);
             //shufflePieces();
+            BOARD.interval = setInterval(autoSave, 60000);
         }, 2000);
     };
 }
@@ -1591,6 +1604,9 @@ function backToMenu() {
     if (!confirm("Are you sure you want to leave the puzzle?")) {
         return;
     }
+
+    // Stop auto save
+    clearInterval(BOARD.interval);
 
     // Clear out existing fabric canvas object
     removeBoardEvents();
@@ -1750,5 +1766,44 @@ async function importImage(entries, entryName, importName) {
         var newFile = await createFile("puzzles", importName);
         let pngBlob = await img[0].getData(new zip.BlobWriter(), {});
         await writeFile(newFile, pngBlob);
+    }
+}
+
+function victoryCelebration() {
+    let puzzle = BOARD.puzzle;
+    let pieces = BOARD.pieces;
+
+    // TODO: Find a celebration audio, maybe 10-15s
+    audio('shake');
+
+    // TODO: Center the puzzle, BOARD.getObjects()[0]
+
+    for (let r = 0; r < pieces.length; r++) {
+        const cols = pieces[r].length;
+        for (let c = 0; c < cols; c++) {
+            let piece = pieces[r][c];
+            let path = piece.object;
+            const render = (r == pieces.length - 1) && (c == cols - 1);
+
+            // TODO: Come up with a little celebration animation
+            const buf = 300;
+            const height = ((2 * puzzle.height) - (2 * buf)) + buf;
+            const width = ((2 * puzzle.width) - (2 * buf)) + buf;
+            const top = Math.floor(Math.random() * height) - (height / 4);
+            const left = Math.floor(Math.random() * width) - (width / 4);
+            animatePath(path, 'top', top, 2000, render);
+            animatePath(path, 'left', left, 2000, render);
+            if (BOARD.orientation > 0) {
+                let angles = BOARD.orientation == 1 ? [0, 180] : [0, 90, 180, 270];
+                const randomIndex = Math.floor(Math.random() * angles.length);
+                animatePath(path, 'angle', angles[randomIndex] * Math.floor(Math.random() * 4), 2000, render, undefined, undefined, function(path) { 
+                    path.straighten(); 
+                            
+                    // Unlock the path to allow user movement
+                    path.lockMovementX = false;
+                    path.lockMovementY = false;
+                });
+            }
+        }
     }
 }

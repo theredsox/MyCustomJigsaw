@@ -151,3 +151,35 @@ function findPuzzleByTitle(fid, title) {
     let matches = Object.entries(puzzles).filter(([k, v]) => k.startsWith("p") && v.title == title);
     return matches.length > 0 ? matches[0] : undefined;
 }
+
+function autoSave() {
+    localStorage.setItem("autoSaveId", BOARD.id);
+    localStorage.setItem("autoSave", JSON.stringify(BOARD));
+    console.log("AutoSaved: " + new Date().toTimeString().split(' ')[0]);
+
+    // TODO: Debug what values are not being auto-saved
+    // Looks like we at least need to relink path.piece.object = path;
+    console.log("Before save");
+    console.log(BOARD);
+
+    console.log("After save");
+    var json = JSON.parse(JlocalStorage.getItem("autoSave"));
+    for (let jsonEntry of Object.entries(json)) {
+        json[jsonEntry[0]] = JSON.parse(jsonEntry[1]);
+    }
+    console.log(json);
+}
+
+function isAutoSave() {
+    return BOARD.id == localStorage.getItem("autoSaveId");
+}
+
+function loadAutoSave() {
+    BOARD.clear();
+    BOARD.loadFromJSON(localStorage.getItem("autoSave"));
+}
+
+function clearAutoSave() {
+    localStorage.removeItem("autoSaveId");
+    localStorage.removeItem("autoSave");
+}
