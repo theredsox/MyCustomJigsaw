@@ -1,3 +1,4 @@
+// @param BOARD - fabric.Canvas - the canvas to attach user event triggers to
 function configureBoardEvents(BOARD) {
     BOARD.on('mouse:wheel', eventListenerMouseWheel);
     BOARD.on('mouse:down', eventListenerMouseDown);
@@ -17,6 +18,7 @@ function removeBoardEvents() {
     window.removeEventListener("keyup", eventListenerKeyup);
 }
 
+// @param opt - DOM event options
 function eventListenerMouseWheel(opt) {
     var delta = opt.e.deltaY;
     var zoom = BOARD.getZoom();
@@ -32,6 +34,7 @@ function eventListenerMouseWheel(opt) {
     opt.e.stopPropagation();
 }
 
+// @param opt - DOM event options
 function eventListenerMouseDown(opt) {
     var evt = opt.e;
     var target = opt.target
@@ -135,6 +138,7 @@ function eventListenerMouseDown(opt) {
     }
 }
 
+// @param opt - DOM event options
 function eventListenerMouseMove(opt) {
     var e = opt.e;
     let target = opt.target;
@@ -168,6 +172,7 @@ function eventListenerMouseMove(opt) {
     }
 }
 
+// @param opt - DOM event options
 function eventListenerMouseUp(opt) {
     var evt = opt.e;
     let target = opt.target;
@@ -258,6 +263,7 @@ function eventListenerMouseUp(opt) {
     }
 }
 
+// @param opt - DOM event options
 function eventListenerMouseOver(opt) {
     BOARD.overTarget = opt.target;
 }
@@ -266,6 +272,7 @@ function eventListenerMouseOut() {
     BOARD.overTarget = undefined;
 }
 
+// @param opt - DOM event options
 function eventListenerSelectionCreated(opt) {
     if (opt.selected.length > 1) {
         var group = BOARD.getActiveObject();
@@ -288,6 +295,7 @@ function eventListenerSelectionCreated(opt) {
     }
 }
 
+// @param opt - DOM event options
 function eventListenerBeforeSelectionCreated(opt) {
     if (opt.target.type == 'activeSelection') {
         let objs = opt.target.getObjects();
@@ -310,6 +318,7 @@ function eventListenerBeforeSelectionCreated(opt) {
     }
 }
 
+// @param evt - DOM event
 function eventListenerKeydown(evt) {
     // Rotate piece
     if (BOARD.orientation > 0 && evt.key == "Alt" && BOARD.overTarget) {
@@ -330,7 +339,7 @@ function eventListenerKeydown(evt) {
             }, function(path) {
                 path.straighten();
 
-                rotateWhileMovingWorkaround(path, evt);
+                rotateWhileMovingWorkaround(path);
 
                 path._left = undefined;
                 path._top = undefined;
@@ -356,6 +365,7 @@ function eventListenerKeydown(evt) {
     }
 }
 
+// @param evt - DOM event
 function eventListenerKeyup(evt) {
     if (evt.key == "Control") {
         BOARD.ctrlSelection = false;
@@ -363,9 +373,10 @@ function eventListenerKeyup(evt) {
 }
 
 // FabricJS appears to have a bug where if you rotate an object while it is being dragged,
-// some internal values used in the move are not being properly updated. This is a workaround,
+// some internal values used in the move are not being properly updated. This is a workaround
 // I came up with for it. Hopefully can be removed after a future release of the lib.
-function rotateWhileMovingWorkaround(target, e) {
+// @param target - fabric.Group|fabric.Path
+function rotateWhileMovingWorkaround(target) {
     if (BOARD._currentTransform?.target == target) {
         // [x,y] shift due to rotate
         let diffLeft = target._left - target.left;

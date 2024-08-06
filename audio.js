@@ -20,6 +20,7 @@ const audioAssets = {
 
 let AUDIO_ENABLED = true;
 
+// @param key - string - asset key
 function audio(key) {
     if (AUDIO_ENABLED) {
         let audio = new Audio(audioAssets[key]);
@@ -27,6 +28,7 @@ function audio(key) {
     }
 }
 
+// @param enabled - boolean - if true, audio SFX are enabled
 function setAudioEnabled(enabled) {
     AUDIO_ENABLED = enabled;
     if (AUDIO_ENABLED) {

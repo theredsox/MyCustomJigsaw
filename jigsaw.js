@@ -92,6 +92,8 @@ function sortPuzzles([aK,aV],[bK,bV]) {
     return aV.localeCompare(bV);
 }
 
+// @param menuItem - DOM object - menu item DIV
+// @param event - DOM Event
 function menuItemClick(menuItem, event){
     audio('click');
 
@@ -111,10 +113,12 @@ function menuItemClick(menuItem, event){
         ACTIVE_FID = menuItem.id;
         loadMainMenu();
     } else {
+        // TODO: If this puzzle has a saved game, ask if they want to start it instead of showing the overlay
         loadPlayOverlay(menuItem, event);
     }
 }
 
+// @param menuItem - DOM object - menu item DIV
 function menuItemDropTarget(menuItem) {
     menuItem.addEventListener("dragover", function(event){ 
         event.preventDefault();
@@ -132,6 +136,7 @@ function menuItemDropTarget(menuItem) {
     });
 }
 
+// @param menuItem - DOM object - menu item DIV
 function menuItemDragTarget(menuItem) {
     menuItem.addEventListener("dragstart", function(event){
         event.dataTransfer.setData("text", event.target.id);
@@ -171,6 +176,8 @@ function menuItemDragTarget(menuItem) {
     });
 }
 
+// @param id - string - Puzzle or folder ID
+// @param title - string - Title of the stored puzzle or folder
 async function loadMenuItem(id, title) {
     var isFolder = id.startsWith("f");
 
@@ -201,6 +208,9 @@ async function loadMenuItem(id, title) {
     mainMenu.appendChild(menuItem);
 }
 
+// @param buttonId - string - ID of the DOM object button
+// @param textField - DOM object - INPUT text field with name of puzzle of folder
+// @param event - DOM Event
 function checkButtonStatus(buttonId, textField, event) {
     // Disable passed button when no name is provided
     var button = document.getElementById(buttonId);
@@ -314,6 +324,7 @@ function deletePuzzlesCancel() {
     }
 }
 
+// @param difficulty - DOM object - DIV representing user selected difficulty
 function playOverlayDifficultyClick(difficulty) {
     audio('click');
 
@@ -337,6 +348,7 @@ function playOverlayOrientationInfoClick() {
     document.getElementById("infoOverlay").classList.remove("remove");
 }
 
+// @param orientationSelect - DOM Object - SELECT representing user selected orientation setting
 function playOverlayOrientationSelectChange(orientationSelect) {
     audio('click');
 
@@ -351,6 +363,7 @@ function playOverlayOrientationSelectChange(orientationSelect) {
     orientationSelect.className = "orientationSelect orientationOption" + orientationSelect.value;
 }
 
+// @param playButton - DOM Object - BUTTON starting play of a puzzle
 function playOverlayPlayButtonClick(playButton) {
     audio('click');
 
@@ -377,6 +390,8 @@ function playOverlayCancelButtonClick() {
     document.getElementById("cancelPlayButton").parentElement.remove();
 }
 
+// @param menuItem - DOM object - menu item DIV
+// @param event - DOM Event
 function loadPlayOverlay(menuItem, event) {
     
     // Clone the menuItem to use as the play overlay
@@ -469,6 +484,7 @@ function createPuzzle() {
     document.getElementById("fileOpener").click();
 }
 
+// @param fileOpener - DOM Object - INPUT tracking user selected local puzzle image
 function fileOpenerChange(fileOpener) {
     if (fileOpener.files.length > 0) {
         // Default title to file name
@@ -640,6 +656,7 @@ function determineAspectRatio(dimensions) {
     }
 }
 
+// @param aspectRatio - [integer, integer] - Aspect ratio of chosen puzzle
 function getDifficulties(aspectRatio) {
     let difficulties = {};
 
@@ -699,6 +716,7 @@ function getDifficulties(aspectRatio) {
 
 // @param canvas - HTML5 canvas
 // @param dir - string - directory to save image in
+// @param filename - string - filename to use when saving the image
 async function saveCanvasToPng(canvas, dir, filename) {
     // Convert canvas to PNG blob
     const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -733,7 +751,7 @@ function closePuzzleOverlay() {
     document.getElementById("createPuzzleSaveButton").classList.add("remove");
 }
 
-// @param title - string
+// @param title - string - user provided title of puzzle or folder
 function formatTitle(title) {
     // Trim file type
     title = title.substring(0, title.lastIndexOf("."));
@@ -754,7 +772,8 @@ function formatTitle(title) {
 }
 
 // @param id - string - DOM id
-// @param show - boolean
+// @param show - boolean - true if the page represented by the pased id should be visible
+// @param showHeader - boolean - true if the DOM objects above the page DIV should be visible
 function displayPage(id, show, showHeader) {
     var page = document.getElementById(id);
     if (show) {
@@ -854,13 +873,13 @@ function closeInfoOverlay() {
     document.getElementById("infoOverlay").classList.add("remove");
 }
 
+// @param onclickFunc - JS function - function to be executed upon overlay cover click
 function showOverlayCover(onclickFunc) {
     let cover = document.getElementById("overlayCover");
     cover.classList.remove("remove");
     if (onclickFunc) {
         cover.onclick = onclickFunc;
     }
-
 }
 
 function hideOverlayCover() {
@@ -882,7 +901,8 @@ function getRandomColor() {
     return color;
 }
 
-// @param object - fabric.Object
+// @param object - fabric.Object - puzzle piece
+// @param pos - string - (tl|tr|br|bl)
 function getAbsolutePosition(object, pos) {
     if (object.group) {
         // Groups use relative positioning for children. Oddly relative to the center of the group, a FabricJS choice.
@@ -902,6 +922,7 @@ function getAbsolutePosition(object, pos) {
 // EX: If zooming out while mouse is in the [0,0] corner, user should never see to the left or 
 //     above [0,0]. So adjust the "center" of the view to keep the edge at [0,0] as long as possible.
 //     At zoom levels showing entire width or height, we will start showing below [0,0].
+// @param event - Event
 function respectBoardPanBoundaries(event) {
     // var vpt = this.viewportTransform;
     // var vpb = BOARD.calcViewportBoundaries();
@@ -914,6 +935,7 @@ function respectBoardPanBoundaries(event) {
     // TODO: Determine if any visible point of the board is outside BOARD.panWidth/BOARD.panHeight
 }
 
+// @param zoom - number - zoom value looking to be set
 function respectZoomMinMax(zoom) {
     let puzzle = BOARD.puzzle;
     let ratio = Math.sqrt((puzzle.width * puzzle.height) / (BOARD.getWidth() * BOARD.getHeight()));
@@ -929,6 +951,7 @@ function respectZoomMinMax(zoom) {
 }
 
 // Decimal percent to zoom, must be between .25 and 3
+// @param percent - number
 function zoomTo(percent) {
     let puzzle = BOARD.puzzle;
     let ratio = Math.sqrt((puzzle.width * puzzle.height) / (BOARD.getWidth() * BOARD.getHeight()));
@@ -958,6 +981,8 @@ function ctrlSelectionDrop() {
     BOARD.ctrlSelectionObjects = [];
 }
 
+// @param path - fabric.Path - the piece being zoomed into
+// @param curValue - number - the animated path attribute's current value
 function setZoomPosition(path, curValue) {
     // Center the piece as zoom occurs
     let per = (curValue - path._zoomScale)/(path._maxScale - path._zoomScale);
@@ -977,6 +1002,7 @@ function setZoomPosition(path, curValue) {
     path.top = ((1-per) * path._zoomTop) + (per * endY);
 }
 
+// @param path - fabric.Path - the piece being zoomed into
 function centerOfPiece(path) {
     let tl = getPathPoint(path, 'tl');
     let tr = getPathPoint(path, 'tr');
@@ -989,6 +1015,7 @@ function centerOfPiece(path) {
         (Math.min(tl.y, tr.y, br.y, bl.y) + Math.max(tl.y, tr.y, br.y, bl.y)) / 2);
 }
 
+// @param path - fabric.Path - the piece being zoomed into
 // @param pos - string - (tl|tr|br|bl)
 function getPathPoint(path, pos) {
     // Top of piece always starts with an entry point, 'M 100 100'. Others may be lines or a triplet of bezier curves.
@@ -1010,6 +1037,7 @@ function getPathPoint(path, pos) {
     }
 }
 
+// @param target - fabric.Path|fabric.Group - Object user interacting with to check for adjacent piece
 function snapPathOrGroup(target) {
     target.setCoords();
     
@@ -1034,6 +1062,7 @@ function snapPathOrGroup(target) {
     }
 }
 
+// @param path - fabric.Path - piece to be considered for snapping
 function snapPiece(path) {
     // Consider the adjascent pieces that could be snapped to
     let aPiece = path.piece;
@@ -1079,9 +1108,8 @@ function getPathAngle(a) {
 
 // @param a - fabric.Object - (Path or Group)
 // @param b - fabric.Object - (Path or Group)
-// @param dir - string - ("t"|"r"|"b"|"l") directions
 // @return boolean - true if snap was successful
-function snap(a, b, dir) {
+function snap(a, b) {
     // If both pieces are in the same group, already snapped
     if (a.group && b.group && a.group == b.group) {
         return;
@@ -1091,8 +1119,6 @@ function snap(a, b, dir) {
     if (getPathAngle(a) % 360 != getPathAngle(b) % 360) {
         return;
     }
-
-    //console.log(dir);
 
     // Get the relative positioning of the two points at their origin and current position
     var aOrigPoint = a.originalCoords.tl;
@@ -1127,7 +1153,6 @@ function snap(a, b, dir) {
     if (Math.abs(xDiff) <= BOARD.snap && Math.abs(yDiff) <= BOARD.snap) {
         //console.log("SNAPPED!");
         // Shift A exactly into place, as A is the piece being moved. If A is in a group, shift the group.
-        // TODO: May need to shift B instead in some cases
         if (a.group) {
             if (aPathAngle % 360 == 0 || aPathAngle % 360 == 180) {
                 a.group.left -= xDiff;
@@ -1154,6 +1179,8 @@ function snap(a, b, dir) {
     return false;
 }
 
+// @param a - fabric.Path|fabric.Group
+// @param b - fabric.Path|fabric.Group
 function updateGroups(a, b) {
     // Merge or create a piece group so snapped pieces move together
     if (!a.group && !b.group) {
@@ -1275,6 +1302,7 @@ function updateGroups(a, b) {
     }
 }
 
+// @param group - fabric.Group
 function setGroupShadow(group) {
     // Remove individual piece shadows
     group.getObjects().forEach(function(c) {
@@ -1291,7 +1319,9 @@ function setGroupShadow(group) {
     group.shadow = shadow;
 }
 
-// Returns the absulute top left point, regardless of rotation.
+// Returns the absolute top left point, regardless of rotation.
+// @param a - fabric.Path|fabric.Group
+// @param b - fabric.Path|fabric.Group
 function getMinimumPoint(a, b) {
     let aC = a.aCoords;
     let bC = b.aCoords;
@@ -1384,11 +1414,11 @@ async function startPuzzle(id, difficulty, orientation) {
                     let piece = pieces[r][c];
                     const paths = piece.top + " " + piece.right + " " + piece.bottom + " " + piece.left;
                     let path = new fabric.Path(paths);
+                    path.row = r;
+                    path.col = c;
                     path.hasBorders = false;
                     path.hasControls = false;
                     path.stroke = "black";
-                    // TODO: Knock down the width for smaller resolution photos that choose a lot of pieces.
-                    // So maybe based on Path size?
                     path.strokeWidth = stroke;
                     path.lockRotation = true;
                     path.lockScalingX = true;
@@ -1422,14 +1452,7 @@ async function startPuzzle(id, difficulty, orientation) {
                     BOARD.add(path);
 
                     path.originalCoords = {...path.aCoords};
-
-                    // Calculate the offset for the center of the piece vs the bounding box.
-                    // This will be used to set the animation rotation point for the piece
-                    let boundingCenter = path.getCenterPoint();
-                    let pieceCenter = centerOfPiece(path);
-                    let centerOffset = new fabric.Point(pieceCenter.x - boundingCenter.x, pieceCenter.y - boundingCenter.y);
-                    path._originX = 0.5 + (centerOffset.x / path.width);
-                    path._originY = 0.5 + (centerOffset.y / path.height);
+                    setPathOrigin(path);
                 }
             }
         }
@@ -1461,6 +1484,18 @@ async function startPuzzle(id, difficulty, orientation) {
     };
 }
 
+// Calculate the offset for the center of the piece vs the bounding box.
+// This will be used to set the animation rotation point for the piece.
+// @param path - fabric.Path
+function setPathOrigin(path) {
+    let boundingCenter = path.getCenterPoint();
+    let pieceCenter = centerOfPiece(path);
+    let centerOffset = new fabric.Point(pieceCenter.x - boundingCenter.x, pieceCenter.y - boundingCenter.y);
+    path._originX = 0.5 + (centerOffset.x / path.width);
+    path._originY = 0.5 + (centerOffset.y / path.height);
+}
+
+// @param enabled - boolean
 function setPuzzleBackgroundEnabled(enabled) {
     if (enabled) {
         document.getElementById("ghostImageOn").classList.remove("remove");
@@ -1477,6 +1512,14 @@ function setPuzzleBackgroundEnabled(enabled) {
     setGhostImageEnabled(enabled);     // Save setting
 }
 
+// @param path - fabric.Group|fabric.Path
+// @param prop - string - DOM property to animate
+// @param endPoint - number - the value which to animate the property to
+// @param duration - number - the duration of the animation
+// @param render - boolean - if true, the fabric canvas will be refreshed on each iteration
+// @param onBeforeFunc - JS function - called before animation starts
+// @param onChangeFunc - JS function - called in each iteration of the animation - be careful about performance
+// @param onCompleteFunc - JS function - called when the animation has completed
 function animatePath(path, prop, endPoint, duration, render, onBeforeFunc, onChangeFunc, onCompleteFunc) {
     if (onBeforeFunc) {
         onBeforeFunc(path);
@@ -1684,6 +1727,7 @@ async function importPuzzles() {
     document.getElementById("importOpener").click();
 }
 
+// @param importOpener - DOM Object - INPUT tracking user selected local zip file
 async function importPuzzlesChange(importOpener) {
     if (importOpener.files.length > 0) {
         // Show the processing overlay
@@ -1760,6 +1804,9 @@ async function importPuzzlesChange(importOpener) {
     }
 }
 
+// @param entries - zip.Entry[]
+// @param entryName - string - name of the image file to import
+// @param importName - string - name of the file to save into the filesystem
 async function importImage(entries, entryName, importName) {
     let img = entries.filter(e => !e.directory && e.filename == "puzzles/" + entryName);
     if (img.length > 0) {

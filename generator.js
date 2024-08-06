@@ -11,6 +11,9 @@ class PuzzlePiece {
     // The fabric Path object representing this piece
     object;
 
+    // @param id - string - ID representing the piece
+    // @param row - integer - 0-based row the piece is in
+    // @param col - integer - 0-based column the piece is in
     constructor(id, row, col) {
         this.id = id;
         this.row = row;
@@ -19,6 +22,9 @@ class PuzzlePiece {
 }
 
 class PuzzleGenerator {
+    // @param - puzzleMetadata - Object - metadata of the puzzle
+    // @param - rows - number of rows to split the puzzle into
+    // @param - cols - number of columns to split the puzzle into
     constructor(puzzleMetadata, rows, cols) {
         this.width = puzzleMetadata.width;
         this.height = puzzleMetadata.height;
@@ -36,6 +42,7 @@ class PuzzleGenerator {
         return pieces;
     }
 
+    // @param pieces - PuzzlePiece[] - the array in which generated pieces are stored
     getOrCreatePiece(pieces) {
         let row = pieces[this.yi];
         if (!row) {
@@ -50,6 +57,7 @@ class PuzzleGenerator {
         return piece;
     }
 
+    // @param pieces - PuzzlePiece[] - the array in which generated pieces are stored
     generate_rows(pieces) {
         this.vertical = 0;
        
@@ -97,6 +105,7 @@ class PuzzleGenerator {
         }
     }
 
+    // @param pieces - PuzzlePiece[] - the array in which generated pieces are stored
     generate_columns(pieces) {
         this.vertical = 1;
          
@@ -141,7 +150,10 @@ class PuzzleGenerator {
         }
     }
 
+    ///////////////////////////
     // Internals for edge generation; cubic bezier curves generation
+    ///////////////////////////
+
     a; b; c; d; e; t; j; flip; xi; yi; xn; yn; vertical; offset = 0; width; height; radius; seed = 1;
     
     random() { var x = Math.sin(this.seed) * 10000; this.seed += 1; return x - Math.floor(x); }
@@ -177,12 +189,17 @@ class PuzzleGenerator {
     p8w() { return this.w(this.e); }
     p9l() { return this.l(1.0); }
     p9w() { return this.w(0.0); }
+
+    // @param min - number - minimum value
+    // @param max - number - maximum value
+    // @param decimals - integer - number of decimal places
     randomNum(min, max, decimals) {
         var precision = Math.pow(10, decimals);
         min *= precision;
         max *= precision;
         return Math.floor((Math.random() * (max - min)) + min) / precision;
     }
+    
     seeds() { 
         this.seed = Math.random() * 10000;
         this.t = this.randomNum(20, 25, 1) / 200.0;
